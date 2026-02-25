@@ -817,7 +817,7 @@ function calculateResults(e) {
 
     // Convert exp efficiency based on current unit
     // If unit is 萬, multiply by 10,000
-    // Note: This input already includes regular buffs (Holy Symbol, Taunt, etc.)
+    // Note: This input already includes regular buffs (Holy Symbol, Showdown, etc.)
     const baseExpEfficiency = currentUnit === 'man' ? expEfficiency * 10000 : expEfficiency;
 
     // Calculate regular multiplier
