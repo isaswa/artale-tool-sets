@@ -1,0 +1,183 @@
+/* ===== Hamburger Button ===== */
+
+.nav-hamburger {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 101;
+    width: 44px;
+    height: 44px;
+    background: var(--container-bg);
+    border: 2px solid var(--input-border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.3s ease;
+    color: var(--text-color);
+}
+
+.nav-hamburger:hover {
+    transform: scale(1.1);
+}
+
+.nav-hamburger-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 20px;
+}
+
+.nav-hamburger-lines span {
+    display: block;
+    height: 2px;
+    background: var(--text-color);
+    border-radius: 1px;
+    transition: background 0.3s ease;
+}
+
+/* ===== Backdrop ===== */
+
+.nav-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.nav-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ===== Sidebar ===== */
+
+.nav-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100%;
+    background: var(--container-bg);
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.nav-sidebar.open {
+    transform: translateX(0);
+}
+
+.nav-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid var(--input-border);
+    flex-shrink: 0;
+}
+
+.nav-sidebar-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.nav-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.nav-sidebar-close:hover {
+    opacity: 1;
+}
+
+/* ===== Nav List ===== */
+
+.nav-sidebar-list {
+    list-style: none;
+    margin: 0;
+    padding: 12px 0;
+    flex: 1;
+}
+
+.nav-sidebar-list li {
+    margin: 0;
+    padding: 0;
+}
+
+.nav-link {
+    display: block;
+    padding: 14px 20px;
+    color: var(--text-color);
+    text-decoration: none;
+    font-size: 15px;
+    transition: background-color 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.nav-link:hover {
+    background-color: var(--input-bg, rgba(255, 255, 255, 0.05));
+}
+
+.nav-link.active {
+    background-color: var(--input-bg, rgba(255, 255, 255, 0.1));
+    border-left-color: var(--button-bg, var(--accent, var(--primary, #4CAF50)));
+    font-weight: bold;
+}
+
+/* ===== Home link at bottom ===== */
+
+.nav-sidebar-home {
+    border-top: 1px solid var(--input-border);
+    padding: 12px 0;
+    flex-shrink: 0;
+}
+
+.nav-sidebar-home .nav-link {
+    opacity: 0.7;
+    font-size: 14px;
+}
+
+.nav-sidebar-home .nav-link:hover {
+    opacity: 1;
+}
+
+/* ===== Mobile ===== */
+
+@media (max-width: 600px) {
+    .nav-hamburger {
+        width: 40px;
+        height: 40px;
+        top: 12px;
+        left: 12px;
+    }
+
+    .nav-hamburger-lines {
+        width: 18px;
+        gap: 3px;
+    }
+
+    .nav-sidebar {
+        width: 260px;
+    }
+}

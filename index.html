@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artale 工具集</title>
+    <link rel="stylesheet" href="common/header.css">
+    <link rel="stylesheet" href="common/theme.css">
+    <link rel="stylesheet" href="common/nav.css">
+    <link rel="stylesheet" href="common/footer.css">
+    <script>
+        (function() {
+            var keys = ['theme', 'artale_theme', 'nshot-theme'];
+            for (var i = 0; i < keys.length; i++) {
+                if (localStorage.getItem(keys[i]) === 'light') {
+                    document.documentElement.classList.add('light-early');
+                    break;
+                }
+            }
+        })();
+    </script>
+    <style>
+        html.light-early body { background-color: #f5f5f5; color: #333333; }
+
+        :root {
+            --bg-color: #2a2a2a;
+            --text-color: #ffffff;
+            --container-bg: #353535;
+            --input-bg: #454545;
+            --input-border: #555555;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+        body.light-theme {
+            --bg-color: #f5f5f5;
+            --text-color: #333333;
+            --container-bg: #ffffff;
+            --input-bg: #ffffff;
+            --input-border: #cccccc;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+        body {
+            font-family: 'Microsoft JhengHei', 'Arial', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            box-sizing: border-box;
+        }
+        .tool-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            max-width: 960px;
+            width: 100%;
+            padding: 24px 16px;
+            box-sizing: border-box;
+        }
+        .tool-card {
+            background: var(--container-bg);
+            border-radius: 12px;
+            padding: 28px 24px;
+            box-shadow: 0 4px 6px var(--shadow);
+            text-decoration: none;
+            color: var(--text-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 2px solid transparent;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 120px;
+        }
+        .tool-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px var(--shadow);
+            border-color: var(--input-border);
+        }
+        .tool-card.disabled {
+            opacity: 0.35;
+            pointer-events: none;
+            cursor: default;
+        }
+        .tool-card.disabled:hover {
+            transform: none;
+            box-shadow: 0 4px 6px var(--shadow);
+            border-color: transparent;
+        }
+        .tool-card.disabled .placeholder {
+            font-size: 16px;
+            opacity: 0.7;
+            text-align: center;
+        }
+        .tool-card h2 {
+            font-size: 20px;
+            margin: 0 0 12px;
+        }
+        .tool-card p {
+            font-size: 14px;
+            margin: 0;
+            opacity: 0.7;
+            line-height: 1.6;
+        }
+        @media (max-width: 768px) {
+            .tool-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 500px) {
+            .tool-cards {
+                grid-template-columns: 1fr;
+            }
+            .tool-card {
+                padding: 20px 16px;
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body data-tool="home" data-tool-title="Artale 工具集">
+
+    <div class="tool-cards">
+        <a href="artale-exp-time-calculator/" class="tool-card">
+            <h2>經驗值時間效率計算機</h2>
+            <p>計算練功所需時間，支援經驗加成、排程規劃與等級歷史記錄。</p>
+        </a>
+        <a href="artale-event-tracker/" class="tool-card">
+            <h2>活動道具計算機</h2>
+            <p>追蹤活動任務完成進度，計算道具兌換與商店規劃。</p>
+        </a>
+        <a href="artale-mob-n-shot-calculator/" class="tool-card">
+            <h2>擊殺次數計算機</h2>
+            <p>模擬技能傷害分佈，計算擊殺怪物所需攻擊次數。</p>
+        </a>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+        <div class="tool-card disabled"><span class="placeholder">製作中</span></div>
+    </div>
+
+    <script src="common/header.js"></script>
+    <script src="common/theme.js"></script>
+    <script src="common/nav.js"></script>
+    <script src="common/footer.js"></script>
+</body>
+</html>

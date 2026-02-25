@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artale擊殺次數計算機</title>
+  <link rel="stylesheet" href="../common/header.css">
+  <link rel="stylesheet" href="../common/theme.css">
+  <link rel="stylesheet" href="../common/nav.css">
+  <link rel="stylesheet" href="../common/footer.css">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function() {
+      var keys = ['theme', 'artale_theme', 'nshot-theme'];
+      for (var i = 0; i < keys.length; i++) {
+        if (localStorage.getItem(keys[i]) === 'light') {
+          document.documentElement.classList.add('light-early');
+          break;
+        }
+      }
+    })();
+  </script>
+  <style>html.light-early body { background-color: #eef2f7; color: #333333; }</style>
+</head>
+<body data-tool="nshot" data-tool-title="Artale擊殺次數計算機">
+
+  <main class="container">
+    <!-- Left / Top: Player Stats -->
+    <section class="panel" id="stats-panel">
+      <h2>角色數值</h2>
+
+      <div class="form-group">
+        <label for="job-select">職業</label>
+        <select id="job-select"></select>
+      </div>
+      <div class="form-group" id="weapon-group" style="display: none">
+        <label for="weapon-select">武器類型</label>
+        <select id="weapon-select"></select>
+      </div>
+
+      <div class="stat-row">
+        <label class="stat-label str" for="str">力量 STR</label>
+        <input type="number" id="str" value="4" min="0">
+      </div>
+      <div class="stat-row">
+        <label class="stat-label dex" for="dex">敏捷 DEX</label>
+        <input type="number" id="dex" value="25" min="0">
+      </div>
+      <div class="stat-row">
+        <label class="stat-label int" for="int">智力 INT</label>
+        <input type="number" id="int" value="4" min="0">
+      </div>
+      <div class="stat-row">
+        <label class="stat-label luk" for="luk">幸運 LUK</label>
+        <input type="number" id="luk" value="300" min="0">
+      </div>
+
+      <hr>
+
+      <div class="form-group">
+        <label>攻擊力 (Attack Range): 乾淨表攻</label>
+        <div class="hint" style="margin-bottom: 6px">請輸入練功時乾淨表攻 (包含楓祝)</div>
+        <div class="range-inputs">
+          <input type="number" id="atk-min" value="1000" min="0" placeholder="MIN">
+          <span class="range-separator">~</span>
+          <input type="number" id="atk-max" value="2000" min="0" placeholder="MAX">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Buff 加成</label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="buff-takoyaki">
+          <span>章魚燒 (+8 WATK)</span>
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="buff-snowflake">
+          <span>飄雪結晶 (+20 WATK)</span>
+        </label>
+        <div class="checkbox-row">
+          <input type="checkbox" id="buff-custom-enabled">
+          <span>自定義buff (+</span>
+          <input type="number" id="buff-custom-watk" value="0" min="0">
+          <span>WATK)</span>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-row">
+          <span class="info-label">Buff後攻擊力:</span>
+          <span class="info-value" id="buffed-range-value">-</span>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-row">
+          <span class="info-label">推算 WATK:</span>
+          <span class="info-value" id="watk-value">-</span>
+        </div>
+        <div class="info-row" id="buffed-watk-row">
+          <span class="info-label">Buff後 WATK:</span>
+          <span class="info-value" id="buffed-watk-value">-</span>
+        </div>
+        <div class="info-hint" id="watk-hint"></div>
+      </div>
+    </section>
+
+    <!-- Right / Bottom: Simulation -->
+    <section class="panel" id="sim-panel">
+      <h2>模擬設定</h2>
+
+      <div class="form-group">
+        <label for="monster-select">怪物</label>
+        <select id="monster-select"></select>
+      </div>
+      <div class="info-box" id="monster-info"></div>
+
+      <hr>
+
+      <div class="form-group">
+        <label for="skill-select">攻擊技能</label>
+        <select id="skill-select"></select>
+      </div>
+
+      <div id="wip-message" class="info-box" style="display: none; text-align: center; padding: 20px;">
+        尚在製作中
+      </div>
+
+      <div id="implemented-area">
+        <div class="form-group">
+          <label for="skill-level">技能等級</label>
+          <input type="number" id="skill-level" value="30" min="1" max="30">
+        </div>
+        <div class="info-box" id="skill-info"></div>
+
+        <hr>
+
+        <div id="venom-area">
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" id="venom-enabled" checked>
+              <span>飛毒殺 (Venom) 等級 <span class="hint">(0 = 停用)</span></span>
+            </label>
+            <input type="number" id="venom-level" value="1" min="0" max="30">
+          </div>
+          <div class="info-box" id="venom-info"></div>
+        </div>
+
+        <button id="calculate-btn">計算</button>
+
+        <div id="results"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="../common/header.js"></script>
+  <script src="../common/theme.js"></script>
+  <script src="../common/nav.js"></script>
+  <script src="../common/footer.js"></script>
+  <script src="config.js"></script>
+  <script src="job.js"></script>
+  <script src="monster.js"></script>
+  <script src="skill.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

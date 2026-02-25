@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artale 經驗值時間效率計算機</title>
+    <link rel="stylesheet" href="../common/header.css">
+    <link rel="stylesheet" href="../common/theme.css">
+    <link rel="stylesheet" href="../common/nav.css">
+    <link rel="stylesheet" href="../common/footer.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function() {
+            var keys = ['theme', 'artale_theme', 'nshot-theme'];
+            for (var i = 0; i < keys.length; i++) {
+                if (localStorage.getItem(keys[i]) === 'light') {
+                    document.documentElement.classList.add('light-early');
+                    break;
+                }
+            }
+        })();
+    </script>
+    <style>html.light-early body { background-color: #f5f5f5; color: #333333; }</style>
+</head>
+<body data-tool="exp" data-tool-title="楓之谷 Artale 經驗值計算工具">
+
+    <div class="container">
+        <button id="historyToggle" class="history-toggle" aria-label="等級記錄">
+            <svg class="history-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <span class="history-text">等級記錄</span>
+        </button>
+
+        <!-- History Chart Panel -->
+        <div id="historyPanel" class="history-panel hidden">
+            <div class="history-header">
+                <h3>等級記錄歷史</h3>
+                <button id="closeHistory" class="close-history" aria-label="關閉">&times;</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="historyChart"></canvas>
+            </div>
+            <div class="chart-options">
+                <label class="chart-toggle">
+                    <input type="checkbox" id="showExpGain">
+                    <span class="chart-toggle-label">顯示每筆獲得EXP</span>
+                </label>
+                <span id="avgDailyExp" class="chart-stat"></span>
+            </div>
+            <div class="history-footer">
+                <div class="history-actions">
+                    <button id="exportHistory" class="btn-history-action" aria-label="匯出記錄">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        匯出記錄
+                    </button>
+                    <button id="importHistory" class="btn-history-action" aria-label="匯入記錄">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        匯入記錄
+                    </button>
+                    <button id="manageHistory" class="btn-history-action btn-warning" aria-label="管理記錄">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        管理記錄
+                    </button>
+                </div>
+                <div class="history-info">
+                    <p>已記錄 <span id="recordCount">0 筆資料</span></p>
+                </div>
+            </div>
+
+            <!-- Import Modal -->
+            <div id="importModal" class="import-modal hidden">
+                <div class="import-modal-content">
+                    <div class="import-modal-header">
+                        <h4>匯入記錄</h4>
+                        <button id="closeImportModal" class="close-import-modal" aria-label="關閉">&times;</button>
+                    </div>
+                    <div class="import-modal-body">
+                        <p class="import-instruction">請貼上從「匯出記錄」功能獲得的資料:</p>
+                        <textarea id="importTextArea" class="import-textarea" placeholder='[{"timestamp":1234567890,"level":50,"exp":12345,"totalExp":67890}, ...]'></textarea>
+                        <div id="importError" class="import-error hidden"></div>
+                    </div>
+                    <div class="import-modal-footer">
+                        <button id="confirmImport" class="btn-confirm-import">確認匯入</button>
+                        <button id="cancelImport" class="btn-cancel-import">取消</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manage Records Modal -->
+            <div id="manageModal" class="manage-modal hidden">
+                <div class="manage-modal-content">
+                    <div class="manage-modal-header">
+                        <h4>管理歷史紀錄</h4>
+                        <div class="manage-modal-header-actions">
+                            <button id="clearAllHistory" class="btn-clear-all">清空所有紀錄</button>
+                            <button id="closeManageModal" class="close-manage-modal" aria-label="關閉">&times;</button>
+                        </div>
+                    </div>
+                    <div class="manage-modal-toolbar">
+                        <label class="sort-label">
+                            排序:
+                            <select id="manageSortOrder" class="sort-select">
+                                <option value="desc">時間新→舊</option>
+                                <option value="asc">時間舊→新</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="manage-modal-body">
+                        <div id="manageRecordList" class="manage-record-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <main>
+            <form id="calcForm" class="calc-form">
+                <!-- Mode Selection -->
+                <div class="mode-selection">
+                    <button type="button" id="modeSimple" class="mode-btn active">簡單模式</button>
+                    <button type="button" id="modeAdvanced" class="mode-btn">進階模式</button>
+                </div>
+
+                <!-- Current Level and EXP in one line with record button -->
+                <div class="current-status-group">
+                    <div class="form-group-inline">
+                        <label for="currentLevel">現在等級</label>
+                        <input
+                            type="number"
+                            id="currentLevel"
+                            min="1"
+                            max="200"
+                            required
+                            placeholder="輸入現在等級"
+                        >
+                    </div>
+
+                    <div class="form-group-inline">
+                        <label for="currentExp">現在EXP</label>
+                        <input
+                            type="number"
+                            id="currentExp"
+                            min="0"
+                            required
+                            placeholder="輸入現在經驗值"
+                        >
+                    </div>
+
+                    <button type="button" id="recordBtn" class="btn-record" aria-label="記錄">記錄</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="targetLevel">目標等級</label>
+                    <input
+                        type="number"
+                        id="targetLevel"
+                        min="1"
+                        max="200"
+                        required
+                        placeholder="輸入目標等級"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="expEfficiency">現在每10分鐘經驗效率</label>
+                    <div class="exp-unit-toggle">
+                        <button type="button" id="unitMan" class="unit-btn active">單位:萬</button>
+                        <button type="button" id="unitRegular" class="unit-btn">單位:1</button>
+                    </div>
+                    <input
+                        type="number"
+                        id="expEfficiency"
+                        min="0"
+                        step="0.1"
+                        required
+                        placeholder="輸入每10分鐘獲得的經驗值"
+                    >
+                </div>
+
+                <!-- Advanced Options -->
+                <div id="advancedOptions" class="advanced-options hidden">
+                    <div class="advanced-options-header" id="advancedOptionsToggle">
+                        <h3>進階選項</h3>
+                        <svg class="collapse-chevron" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+
+                    <div id="advancedContent" class="advanced-content">
+                        <!-- Area 1: Always-on multipliers -->
+                        <div class="advanced-section">
+                            <h4>常駐經驗加成</h4>
+
+                            <div class="radio-group">
+                                <label>
+                                    <input type="radio" name="holySymbol" value="none" checked>
+                                    無 (0%)
+                                </label>
+                                <label>
+                                    <input type="radio" name="holySymbol" value="alive">
+                                    活7 (+50%)
+                                </label>
+                                <label>
+                                    <input type="radio" name="holySymbol" value="dead">
+                                    死7 (+25%)
+                                </label>
+                            </div>
+
+                            <div class="radio-group-inline">
+                                <span class="radio-group-label">挑釁:</span>
+                                <label>
+                                    <input type="radio" name="showdown" value="none" checked>
+                                    無 (+0%)
+                                </label>
+                                <label>
+                                    <input type="radio" name="showdown" value="lv20">
+                                    Lv.20 (+30%)
+                                </label>
+                                <label>
+                                    <input type="radio" name="showdown" value="lv30" disabled>
+                                    Lv.30 (+40%)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Area 2: EXP Events -->
+                        <div class="advanced-section">
+                            <h4>限時經驗活動</h4>
+
+                            <!-- EXP Coupon -->
+                            <div class="event-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="expCoupon">
+                                    經驗加倍券
+                                </label>
+                                <div id="couponOptions" class="event-options hidden">
+                                    <div class="radio-group-inline">
+                                        <label>
+                                            <input type="radio" name="couponType" value="2x" checked>
+                                            2x (+100%)
+                                        </label>
+                                        <label>
+                                            <input type="radio" name="couponType" value="3x">
+                                            3x (+200%)
+                                        </label>
+                                    </div>
+                                    <label class="input-label">
+                                        剩餘幾張:
+                                        <input type="number" id="couponCount" value="0" class="small-input">
+                                        (加倍券1張=30分鐘)
+                                    </label>
+                                </div>
+                            </div>
+
+
+                            <!-- Custom Event -->
+                            <div class="event-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="customEvent">
+                                    自定義
+                                </label>
+                                <div id="customOptions" class="event-options hidden">
+                                    <label class="input-label">
+                                        經驗加成:
+                                        <input type="number" id="customBonus" min="0" value="100" class="small-input">
+                                        (%, 例: 100 = +100%)
+                                    </label>
+                                    <label class="input-label">
+                                        持續時間:
+                                        <input type="number" id="customDuration" value="0" class="small-input">
+                                        (分鐘, -1 = 無限制)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Area 3: Grinding Schedule -->
+                        <div class="advanced-section">
+                            <div class="schedule-header">
+                                <h4>練功排程</h4>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="enableSchedule">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <div id="scheduleContent" class="schedule-content hidden">
+                                <div class="radio-group">
+                                    <label>
+                                        <input type="radio" name="scheduleMode" value="daily" checked>
+                                        每日練功
+                                    </label>
+                                    <label>
+                                        <input type="radio" name="scheduleMode" value="target">
+                                        目標天數
+                                    </label>
+                                </div>
+
+                                <div id="scheduleInputs" class="schedule-inputs">
+                                    <!-- Daily grinding option -->
+                                    <div id="dailyGrindingInput" class="schedule-option">
+                                        <label class="input-label">每日練功時間:</label>
+                                        <div class="time-hm-input">
+                                            <input type="number" id="dailyHours" min="0" max="23" step="1" value="1" class="small-input">
+                                            <span>小時</span>
+                                            <input type="number" id="dailyMinutes" min="0" max="59" step="1" value="0" class="small-input">
+                                            <span>分鐘</span>
+                                        </div>
+                                        <span id="scheduleWarning" class="schedule-warning" style="display:none;">請輸入大於0的練功時間</span>
+                                    </div>
+
+                                    <!-- Target days option -->
+                                    <div id="targetDaysInput" class="schedule-option hidden">
+                                        <label class="input-label">
+                                            目標天數:
+                                            <input type="number" id="targetDays" min="0" value="0" class="small-input">
+                                            天
+                                        </label>
+                                        <span id="targetDaysWarning" class="schedule-warning" style="display:none;">請輸入大於0的目標天數</span>
+                                    </div>
+                                </div>
+
+                                <!-- Daily Aura -->
+                                <div class="event-group schedule-sub-item">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="dailyAura">
+                                        每日氣場 (每日15次 = 30分鐘)
+                                    </label>
+                                    <div id="auraOptions" class="event-options hidden">
+                                        <div class="radio-group-inline">
+                                            <label>
+                                                <input type="radio" name="auraType" value="2x" checked>
+                                                2x (+100%)
+                                            </label>
+                                            <label>
+                                                <input type="radio" name="auraType" value="3x">
+                                                3x (+200%)
+                                            </label>
+                                        </div>
+                                        <label class="input-label">
+                                            剩餘天數:
+                                            <input type="number" id="auraDays" value="-1" class="small-input">
+                                            (天, -1 = 無限制)
+                                        </label>
+                                        <span id="auraWarning" class="schedule-warning" style="display:none;">如果每日練功時間低於1小時，氣場的計算可能會有較大誤差</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-calculate">計算</button>
+            </form>
+
+            <div id="results" class="results hidden">
+                <h3>計算結果</h3>
+                <div class="result-item">
+                    <span class="result-label">起始等級:</span>
+                    <span id="startLevel" class="result-value">0</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">目標等級:</span>
+                    <span id="endLevel" class="result-value">0</span>
+                </div>
+                <div class="result-item" id="totalExpRow">
+                    <span class="result-label">所需總經驗值:</span>
+                    <span id="totalExp" class="result-value">0</span>
+                </div>
+                <div id="nextLevelExpItem" class="result-item result-sub hidden">
+                    <span class="result-label">到下個等級:</span>
+                    <span id="nextLevelExp" class="result-value">0</span>
+                </div>
+                <div class="result-item" id="regularBonusRow">
+                    <span class="result-label">常駐經驗加成:</span>
+                    <span id="regularBonus" class="result-value">0</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">預計所需時間:</span>
+                    <span id="timeNeeded" class="result-value">0</span>
+                </div>
+                <div id="nextLevelTimeItem" class="result-item result-sub hidden">
+                    <span class="result-label">到下個等級:</span>
+                    <span id="nextLevelTime" class="result-value">0</span>
+                </div>
+                <div id="eventTimeBreakdown" class="event-breakdown hidden">
+                    <!-- Dynamic event phase breakdown will be inserted here -->
+                </div>
+                <div id="scheduleResult" class="result-item hidden">
+                    <span class="result-label" id="scheduleLabel">練功排程:</span>
+                    <span id="scheduleValue" class="result-value">0</span>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <script src="../common/header.js"></script>
+    <script src="../common/theme.js"></script>
+    <script src="../common/nav.js"></script>
+    <script src="../common/footer.js"></script>
+    <script src="const.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

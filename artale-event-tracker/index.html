@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artale 活動道具計算機</title>
+    <link rel="stylesheet" href="../common/header.css">
+    <link rel="stylesheet" href="../common/theme.css">
+    <link rel="stylesheet" href="../common/nav.css">
+    <link rel="stylesheet" href="../common/footer.css">
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        (function() {
+            var keys = ['theme', 'artale_theme', 'nshot-theme'];
+            for (var i = 0; i < keys.length; i++) {
+                if (localStorage.getItem(keys[i]) === 'light') {
+                    document.documentElement.classList.add('light-early');
+                    break;
+                }
+            }
+        })();
+    </script>
+    <style>html.light-early body { background-color: #f5f5f5; color: #333333; }</style>
+</head>
+<body data-tool="event" data-tool-title="楓之谷 Artale 活動道具計算機">
+
+    <div class="container">
+        <main id="app">
+            <!-- Dynamically rendered by script.js -->
+        </main>
+    </div>
+
+    <script src="../common/header.js"></script>
+    <script src="../common/theme.js"></script>
+    <script src="../common/nav.js"></script>
+    <script src="../common/footer.js"></script>
+    <script src="events/2026-02-12/lunar-new-year.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

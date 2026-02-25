@@ -1,0 +1,20 @@
+/* ===== Common Header Bar ===== */
+
+.common-header {
+    background: #3a3a3a;
+    color: #fff;
+    text-align: center;
+    padding: 18px 16px;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+body.light-theme .common-header {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.common-header h1 {
+    font-size: 22px;
+    margin: 0;
+}
