@@ -42,14 +42,20 @@
             <div class="chart-container">
                 <canvas id="historyChart"></canvas>
             </div>
-            <div class="chart-options">
+            <div class="chart-stats">
                 <label class="chart-toggle">
                     <input type="checkbox" id="showExpGain">
                     <span class="chart-toggle-label">顯示每筆獲得EXP</span>
                 </label>
-                <span id="avgDailyExp" class="chart-stat"></span>
+                <div class="chart-stat-lines">
+                    <span id="avgRecentExp" class="chart-stat"></span>
+                    <span id="avgDailyExp" class="chart-stat"></span>
+                </div>
             </div>
             <div class="history-footer">
+                <div class="history-info">
+                    <p>已記錄 <span id="recordCount">0 筆資料</span></p>
+                </div>
                 <div class="history-actions">
                     <button id="exportHistory" class="btn-history-action" aria-label="匯出記錄">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -74,9 +80,6 @@
                         </svg>
                         管理記錄
                     </button>
-                </div>
-                <div class="history-info">
-                    <p>已記錄 <span id="recordCount">0 筆資料</span></p>
                 </div>
             </div>
 

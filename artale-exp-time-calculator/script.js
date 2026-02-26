@@ -1497,6 +1497,14 @@ if (document.readyState === 'loading') {
     init();
 }
 
+// Re-render chart when theme changes so colors update
+document.addEventListener('themeChanged', function () {
+    var panel = document.getElementById('historyPanel');
+    if (panel && !panel.classList.contains('hidden') && typeof renderHistoryChart === 'function') {
+        renderHistoryChart();
+    }
+});
+
 // ====================
 // Level History Tracking
 // ====================
@@ -2148,17 +2156,35 @@ function renderHistoryChart() {
         return record.totalExp - displayHistory[i - 1].totalExp;
     });
 
-    // Calculate and display average daily EXP
+    // Calculate and display recent average EXP (from displayed entries)
+    const avgRecentEl = document.getElementById('avgRecentExp');
+    const nonZeroGains = expGainData.filter(v => v > 0);
+    if (nonZeroGains.length > 0) {
+        const recentAvg = Math.round(nonZeroGains.reduce((a, b) => a + b, 0) / nonZeroGains.length);
+        const dayLabel = shouldAggregate ? `過去${nonZeroGains.length}天` : `近${nonZeroGains.length}筆`;
+        avgRecentEl.textContent = `${dayLabel}平均每日獲得EXP: ${formatNumber(recentAvg)}`;
+    } else {
+        avgRecentEl.textContent = '';
+    }
+
+    // Calculate and display historical average daily EXP (from ALL records)
     const avgExpEl = document.getElementById('avgDailyExp');
-    if (displayHistory.length >= 2) {
-        const firstRecord = previousRecord || displayHistory[0];
-        const lastRecord = displayHistory[displayHistory.length - 1];
-        const totalGain = lastRecord.totalExp - firstRecord.totalExp;
-        const daySpanMs = lastRecord.timestamp - firstRecord.timestamp;
+    if (sortedHistory.length >= 2) {
+        const firstAll = sortedHistory[0];
+        const lastAll = sortedHistory[sortedHistory.length - 1];
+        const totalGain = lastAll.totalExp - firstAll.totalExp;
+        const daySpanMs = lastAll.timestamp - firstAll.timestamp;
         const dayCount = daySpanMs / (24 * 60 * 60 * 1000);
         if (dayCount >= 1) {
             const avgDaily = Math.round(totalGain / dayCount);
-            avgExpEl.textContent = `平均每日獲得EXP: ${formatNumber(avgDaily)}`;
+            const fmtDate = (ts) => {
+                const d = new Date(ts);
+                const yy = String(d.getFullYear()).slice(2);
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yy}-${mm}-${dd}`;
+            };
+            avgExpEl.textContent = `歷史平均每日獲得EXP: ${formatNumber(avgDaily)} (${fmtDate(firstAll.timestamp)} ~ ${fmtDate(lastAll.timestamp)})`;
         } else {
             avgExpEl.textContent = '';
         }
@@ -2205,16 +2231,27 @@ function renderHistoryChart() {
         });
     }
 
-    // Get theme colors
-    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim();
-    const buttonColor = getComputedStyle(document.documentElement).getPropertyValue('--button-bg').trim();
-    const inputBorder = getComputedStyle(document.documentElement).getPropertyValue('--input-border').trim();
+    // Get theme colors (read from body where light-theme overrides are applied)
+    const computedStyle = getComputedStyle(document.body);
+    const textColor = computedStyle.getPropertyValue('--text-color').trim();
+    const buttonColor = computedStyle.getPropertyValue('--button-bg').trim();
+    const inputBorder = computedStyle.getPropertyValue('--input-border').trim();
     const warningColor = '#f59e0b';
 
-    // X-axis configuration with uniform spacing
+    // Weekend color: contrast against chart background
+    const isLight = document.body.classList.contains('light-theme');
+    const weekendColor = isLight ? '#cc0000' : '#ff6666';
     const xAxisConfig = {
         ticks: {
-            color: textColor,
+            color: function (context) {
+                if (!shouldAggregate) return textColor;
+                const record = displayHistory[context.index];
+                if (record) {
+                    const day = new Date(record.timestamp).getDay();
+                    if (day === 0 || day === 6) return weekendColor;
+                }
+                return textColor;
+            },
             font: {
                 family: "'Microsoft JhengHei', Arial, sans-serif",
                 size: 10
@@ -2241,6 +2278,8 @@ function renderHistoryChart() {
         yAxisID: 'y'
     }];
 
+    let avgExpLineValue = null;
+
     if (showExpGain) {
         datasets.push({
             label: '獲得EXP',
@@ -2250,9 +2289,16 @@ function renderHistoryChart() {
             borderColor: warningColor,
             borderWidth: 1,
             yAxisID: 'yGain',
-            order: 1
+            order: 2
         });
-        // Move line chart to front
+
+        // Compute average EXP for the horizontal line plugin
+        const nonZeroGainsForLine = expGainData.filter(v => v > 0);
+        if (nonZeroGainsForLine.length > 0) {
+            avgExpLineValue = Math.round(nonZeroGainsForLine.reduce((a, b) => a + b, 0) / nonZeroGainsForLine.length);
+        }
+
+        // Move level line chart to front
         datasets[0].order = 0;
     }
 
@@ -2333,6 +2379,28 @@ function renderHistoryChart() {
         };
     }
 
+    // Inline plugin: draw average EXP horizontal line across full chart width
+    const avgLinePlugin = {
+        id: 'avgExpLine',
+        afterDraw: function (chart) {
+            if (!showExpGain || avgExpLineValue === null) return;
+            const yGainScale = chart.scales.yGain;
+            if (!yGainScale) return;
+            const yPixel = yGainScale.getPixelForValue(avgExpLineValue);
+            const chartArea = chart.chartArea;
+            const ctx2 = chart.ctx;
+            ctx2.save();
+            ctx2.beginPath();
+            ctx2.setLineDash([6, 3]);
+            ctx2.lineWidth = 2;
+            ctx2.strokeStyle = '#ff4444';
+            ctx2.moveTo(chartArea.left, yPixel);
+            ctx2.lineTo(chartArea.right, yPixel);
+            ctx2.stroke();
+            ctx2.restore();
+        }
+    };
+
     // Create chart
     historyChart = new Chart(ctx, {
         type: 'line',
@@ -2340,6 +2408,7 @@ function renderHistoryChart() {
             labels: labels,
             datasets: datasets
         },
+        plugins: [avgLinePlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -2355,6 +2424,20 @@ function renderHistoryChart() {
                 },
                 tooltip: {
                     callbacks: {
+                        title: function (tooltipItems) {
+                            const idx = tooltipItems[0].dataIndex;
+                            const record = displayHistory[idx];
+                            if (!record) return '';
+                            const d = new Date(record.timestamp);
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            if (shouldAggregate) {
+                                return `${mm}-${dd}`;
+                            }
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const min = String(d.getMinutes()).padStart(2, '0');
+                            return `${mm}-${dd} ${hh}:${min}`;
+                        },
                         label: function (context) {
                             if (context.dataset.yAxisID === 'yGain') {
                                 return `獲得EXP: ${formatNumber(context.raw)}`;

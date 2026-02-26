@@ -141,12 +141,17 @@ body {
     margin-bottom: 8px;
 }
 
-.chart-options {
+.chart-stats {
+    padding: 10px 4px 0;
+    margin-bottom: 16px;
+    border-top: 1px solid var(--input-border);
+}
+
+.chart-stat-lines {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 4px;
-    margin-bottom: 12px;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
 }
 
 .chart-stat {
@@ -183,10 +188,10 @@ body {
 
 .history-footer {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 12px;
+    border-top: 1px solid var(--input-border);
+    padding-top: 12px;
 }
 
 .history-actions {
@@ -242,7 +247,6 @@ body {
 }
 
 .history-info {
-    text-align: center;
     font-size: 14px;
     color: var(--text-color);
     opacity: 0.7;
@@ -1280,11 +1284,6 @@ body {
         height: 250px;
     }
 
-    .history-footer {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
     .history-actions {
         width: 100%;
         justify-content: space-between;
@@ -1304,7 +1303,6 @@ body {
 
     .history-info {
         font-size: 13px;
-        margin-top: 8px;
     }
 
     .import-modal-content {

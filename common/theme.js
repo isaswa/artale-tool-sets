@@ -44,6 +44,7 @@
       var newTheme = nowLight ? 'light' : 'dark';
       setAllThemeKeys(newTheme);
       icon.textContent = nowLight ? '\u{1F319}' : '\u2600\uFE0F';
+      document.dispatchEvent(new CustomEvent('themeChanged', { detail: newTheme }));
     });
 
     document.body.insertBefore(btn, document.body.firstChild);
