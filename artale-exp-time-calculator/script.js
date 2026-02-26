@@ -2156,19 +2156,39 @@ function renderHistoryChart() {
         return record.totalExp - displayHistory[i - 1].totalExp;
     });
 
+    // Date formatter helper
+    const fmtDate = (ts) => {
+        const d = new Date(ts);
+        const yy = String(d.getFullYear()).slice(2);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yy}-${mm}-${dd}`;
+    };
+
     // Calculate and display recent average EXP (from displayed entries)
-    const avgRecentEl = document.getElementById('avgRecentExp');
-    const nonZeroGains = expGainData.filter(v => v > 0);
-    if (nonZeroGains.length > 0) {
+    const recentLabelEl = document.getElementById('avgRecentLabel');
+    const recentValueEl = document.getElementById('avgRecentValue');
+    const recentDateEl = document.getElementById('avgRecentDate');
+    const nonZeroIndices = expGainData.map((v, i) => v > 0 ? i : -1).filter(i => i >= 0);
+    if (nonZeroIndices.length > 0) {
+        const nonZeroGains = nonZeroIndices.map(i => expGainData[i]);
         const recentAvg = Math.round(nonZeroGains.reduce((a, b) => a + b, 0) / nonZeroGains.length);
         const dayLabel = shouldAggregate ? `過去${nonZeroGains.length}天` : `近${nonZeroGains.length}筆`;
-        avgRecentEl.textContent = `${dayLabel}平均每日獲得EXP: ${formatNumber(recentAvg)}`;
+        const firstRecentRecord = displayHistory[nonZeroIndices[0]];
+        const lastRecentRecord = displayHistory[nonZeroIndices[nonZeroIndices.length - 1]];
+        recentLabelEl.textContent = `${dayLabel}平均每日獲得EXP:`;
+        recentValueEl.textContent = formatNumber(recentAvg);
+        recentDateEl.textContent = `(${fmtDate(firstRecentRecord.timestamp)} ~ ${fmtDate(lastRecentRecord.timestamp)})`;
     } else {
-        avgRecentEl.textContent = '';
+        recentLabelEl.textContent = '';
+        recentValueEl.textContent = '';
+        recentDateEl.textContent = '';
     }
 
     // Calculate and display historical average daily EXP (from ALL records)
-    const avgExpEl = document.getElementById('avgDailyExp');
+    const dailyLabelEl = document.getElementById('avgDailyLabel');
+    const dailyValueEl = document.getElementById('avgDailyValue');
+    const dailyDateEl = document.getElementById('avgDailyDate');
     if (sortedHistory.length >= 2) {
         const firstAll = sortedHistory[0];
         const lastAll = sortedHistory[sortedHistory.length - 1];
@@ -2177,19 +2197,18 @@ function renderHistoryChart() {
         const dayCount = daySpanMs / (24 * 60 * 60 * 1000);
         if (dayCount >= 1) {
             const avgDaily = Math.round(totalGain / dayCount);
-            const fmtDate = (ts) => {
-                const d = new Date(ts);
-                const yy = String(d.getFullYear()).slice(2);
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return `${yy}-${mm}-${dd}`;
-            };
-            avgExpEl.textContent = `歷史平均每日獲得EXP: ${formatNumber(avgDaily)} (${fmtDate(firstAll.timestamp)} ~ ${fmtDate(lastAll.timestamp)})`;
+            dailyLabelEl.textContent = '歷史平均每日獲得EXP:';
+            dailyValueEl.textContent = formatNumber(avgDaily);
+            dailyDateEl.textContent = `(${fmtDate(firstAll.timestamp)} ~ ${fmtDate(lastAll.timestamp)})`;
         } else {
-            avgExpEl.textContent = '';
+            dailyLabelEl.textContent = '';
+            dailyValueEl.textContent = '';
+            dailyDateEl.textContent = '';
         }
     } else {
-        avgExpEl.textContent = '';
+        dailyLabelEl.textContent = '';
+        dailyValueEl.textContent = '';
+        dailyDateEl.textContent = '';
     }
 
     // Find min and max levels from displayed history
@@ -2419,6 +2438,21 @@ function renderHistoryChart() {
                         font: {
                             family: "'Microsoft JhengHei', Arial, sans-serif",
                             size: 12
+                        },
+                        generateLabels: function (chart) {
+                            const defaultLabels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                            if (showExpGain && avgExpLineValue !== null) {
+                                defaultLabels.push({
+                                    text: '平均EXP',
+                                    strokeStyle: '#ff4444',
+                                    fillStyle: 'transparent',
+                                    lineWidth: 2,
+                                    lineDash: [6, 3],
+                                    hidden: false,
+                                    pointStyle: false
+                                });
+                            }
+                            return defaultLabels;
                         }
                     }
                 },
