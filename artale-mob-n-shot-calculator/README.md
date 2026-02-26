@@ -14,4 +14,4 @@ A simple calculator for MapleStory Artale, simulating skill damage distribution 
 - Monte Carlo damage simulation (100,000 iterations)
 - Kill count distribution histogram
 - Detailed per-hit damage breakdown
-- Responsive 2-column layout (1-column on mobile)
+- 2-column layout (1-column on mobile)

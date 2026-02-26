@@ -12,4 +12,3 @@ MapleStory Artale TW server event tracker for daily/weekly/one-time events and s
 - Collapsible sections for completed task groups
 - Past record editing for missed days
 - Event history log with daily earn/spend breakdown
-- Responsive design for desktop and mobile

@@ -16,4 +16,3 @@ A simple web-based calculator for MapleStory Artale players to estimate the time
 - Level history tracking with visual line chart
 - Smart daily aggregation for long-term history
 - Export/Import records as text files
-- Responsive design for desktop and mobile
