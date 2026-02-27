@@ -230,7 +230,7 @@
 
     .nav-sidebar.pinned .nav-sidebar-header {
         height: auto;
-        padding: 16px 20px 16px 58px;
+        padding: 23px 20px 16px 58px;
         border-bottom: 1px solid var(--input-border);
     }
 
