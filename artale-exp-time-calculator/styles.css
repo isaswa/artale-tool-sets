@@ -57,6 +57,17 @@ body {
     box-sizing: border-box;
 }
 
+/* ===== Unified section titles ===== */
+.calc-section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin: 0 0 12px;
+    text-align: center;
+    background: rgba(128, 128, 128, 0.15);
+    padding: 8px 16px;
+    border-radius: 8px;
+}
 
 .history-toggle {
     position: relative;
@@ -89,6 +100,7 @@ body {
 }
 
 .history-panel {
+    position: relative;
     background-color: var(--result-bg);
     border: 2px solid var(--input-border);
     border-radius: 8px;
@@ -101,23 +113,15 @@ body {
     display: none;
 }
 
-.history-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-}
-
-.history-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-color);
-}
+/* Close button floats top-right inside history panel (mobile only) */
 
 .close-history {
+    position: absolute;
+    top: 4px;
+    right: 4px;
     background: none;
     border: none;
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1;
     cursor: pointer;
     color: var(--text-color);
@@ -129,6 +133,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 1;
 }
 
 .close-history:hover {
@@ -139,6 +144,7 @@ body {
     position: relative;
     height: 300px;
     margin-bottom: 8px;
+    overflow: hidden;
 }
 
 .chart-stats {
@@ -156,7 +162,7 @@ body {
 }
 
 .chart-stat {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-color);
     opacity: 0.7;
 }
@@ -168,6 +174,8 @@ body {
 
 .chart-stat-date {
     text-align: right;
+    font-size: 11px;
+    word-break: break-all;
 }
 
 .chart-toggle {
@@ -657,9 +665,7 @@ body {
 }
 
 .mode-selection {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 10px;
+    display: none;
 }
 
 .mode-btn {
@@ -812,7 +818,7 @@ body {
 }
 
 .advanced-options {
-    margin: 20px 0;
+    margin: 0;
     transition: all 0.3s ease;
 }
 
@@ -830,11 +836,11 @@ body {
     user-select: none;
 }
 
-.advanced-options-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-color);
+.advanced-options-header .calc-section-title {
+    margin: 0;
 }
+
+/* advanced-options-header h3 now uses .calc-section-title */
 
 .collapse-chevron {
     transition: transform 0.3s ease;
@@ -1070,7 +1076,6 @@ body {
 }
 
 .results {
-    margin-top: 30px;
     padding: 20px;
     background-color: var(--result-bg);
     border-radius: 8px;
@@ -1082,12 +1087,26 @@ body {
     display: none;
 }
 
-.results h3 {
-    font-size: 20px;
-    margin-bottom: 15px;
+/* Invalid state: show message, hide result items */
+.results-invalid-msg {
+    display: none;
     text-align: center;
     color: var(--text-color);
+    opacity: 0.5;
+    padding: 20px 0;
+    font-size: 15px;
 }
+
+.results.invalid .results-invalid-msg {
+    display: block;
+}
+
+.results.invalid .result-item,
+.results.invalid .event-breakdown {
+    display: none !important;
+}
+
+/* Results h3 moved outside .results, now uses .calc-section-title */
 
 .result-item {
     display: flex;
@@ -1139,6 +1158,23 @@ body {
     color: var(--text-color);
     opacity: 0.8;
     flex: 1;
+}
+
+.schedule-result {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background-color: var(--result-bg);
+    border: 2px solid var(--input-border);
+    border-radius: 8px;
+}
+
+.schedule-result.hidden {
+    display: none;
+}
+
+.schedule-result .result-item {
+    padding: 0;
+    border-bottom: none;
 }
 
 .event-breakdown {
@@ -1242,6 +1278,99 @@ body {
     background-color: #1976D2;
 }
 
+
+/* Desktop 2×2 grid layout */
+@media (min-width: 769px) {
+    .calc-layout {
+        max-width: none;
+        min-width: 700px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    /* Prevent grid children from overflowing (canvas resize fix) */
+    .calc-quad {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    /* History toggle: hidden on desktop */
+    .calc-layout > .history-toggle {
+        display: none;
+    }
+
+    /* Calculate button hidden on desktop (auto-update) */
+    .btn-calculate {
+        display: none;
+    }
+
+    /* Results always visible on desktop */
+    .calc-quad-tr .results {
+        display: block !important;
+    }
+
+    /* Advanced options always visible on desktop */
+    .calc-quad-bl .advanced-options {
+        display: block !important;
+    }
+
+    /* History panel always visible on desktop */
+    .calc-quad-br .history-panel {
+        display: block !important;
+    }
+
+    .calc-quad-br .close-history {
+        display: none;
+    }
+
+    /* Divider line between upper and lower rows */
+    .calc-quad-bl,
+    .calc-quad-br {
+        border-top: 1px solid var(--input-border);
+        padding-top: 20px;
+    }
+
+    /* Desktop: use standalone title, hide the one inside collapse header */
+    .advanced-options-header {
+        display: none;
+    }
+
+    .collapse-chevron {
+        display: none;
+    }
+
+    .advanced-content {
+        display: block !important;
+    }
+}
+
+/* Mobile: flatten quads for natural single-column flow */
+@media (max-width: 768px) {
+    .calc-quad-tl,
+    .calc-quad-tr,
+    .calc-quad-bl,
+    .calc-quad-br {
+        display: contents;
+    }
+
+    #historyToggle { order: 1; }
+    #historyPanel { order: 2; }
+    #calcForm { order: 3; }
+    #results { order: 4; }
+    #advancedOptionsToggle { order: 5; }
+    #advancedOptions { order: 6; }
+    #scheduleResult { order: 7; }
+    #eventTimeBreakdown { order: 8; }
+
+    /* Hide standalone quad titles on mobile (quads flatten) */
+    .calc-quad-tl > .calc-section-title,
+    .calc-quad-tr > .calc-section-title,
+    .calc-quad-br > .calc-section-title,
+    .bl-desktop-title {
+        display: none;
+    }
+}
 
 /* Responsive design for tablets */
 @media (max-width: 900px) and (min-width: 601px) {
@@ -1502,12 +1631,11 @@ body {
 
     .results {
         padding: 16px;
-        margin-top: 20px;
     }
 
-    .results h3 {
-        font-size: 18px;
-        margin-bottom: 12px;
+    .calc-section-title {
+        font-size: 15px;
+        margin-bottom: 10px;
     }
 
     .result-item {

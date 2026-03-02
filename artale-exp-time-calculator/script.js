@@ -13,8 +13,8 @@ let enableScheduleCheckbox, scheduleContent;
 let dailyAuraCheckbox, auraOptions;
 let dailyGrindingInput, targetDaysInput;
 
-// Track current mode ('simple' or 'advanced')
-let currentMode = 'simple'; // Default to 簡單模式
+// Mode is always 'advanced' (simple/advanced toggle removed)
+let currentMode = 'advanced';
 
 // Track current unit mode ('man' or 'regular')
 let currentUnit = 'man'; // Default to 萬 (10,000)
@@ -75,32 +75,8 @@ function clampDailyTimeInputs() {
 // Flag to prevent auto-save during initial page load
 let isInitializing = true;
 
-// Toggle between simple and advanced modes
-function toggleMode(mode) {
-    currentMode = mode;
-
-    const modeSimpleBtn = document.getElementById('modeSimple');
-    const modeAdvancedBtn = document.getElementById('modeAdvanced');
-
-    if (mode === 'simple') {
-        modeSimpleBtn.classList.add('active');
-        modeAdvancedBtn.classList.remove('active');
-        advancedOptions.classList.add('hidden');
-
-        // Hide advanced-only result fields
-        document.getElementById('regularBonusRow').classList.add('hidden');
-        document.getElementById('eventTimeBreakdown').innerHTML = '';
-        document.getElementById('eventTimeBreakdown').classList.add('hidden');
-        document.getElementById('scheduleResult').classList.add('hidden');
-    } else {
-        modeSimpleBtn.classList.remove('active');
-        modeAdvancedBtn.classList.add('active');
-        advancedOptions.classList.remove('hidden');
-    }
-
-    // Save mode preference to unified storage
-    saveToLocalStorage();
-}
+// toggleMode is no longer used (mode is always 'advanced')
+function toggleMode() {}
 
 // Toggle event options
 function toggleEventOptions(checkbox, optionsDiv) {
@@ -236,6 +212,17 @@ function calculateExpNeeded(currentLevel, currentExp, targetLevel) {
     }
 
     return totalExpNeeded;
+}
+
+// Show invalid state: display message, hide result items via CSS
+function resetResultsToZero() {
+    resultsDiv.classList.add('invalid');
+
+    // Clear event breakdown and schedule result
+    document.getElementById('eventTimeBreakdown').innerHTML = '';
+    document.getElementById('eventTimeBreakdown').classList.add('hidden');
+    document.getElementById('scheduleResult').classList.add('hidden');
+    lastSimulationResult = null;
 }
 
 // Format number with commas
@@ -421,7 +408,9 @@ function renderEventBreakdown(eventBreakdown, simulationResult, eventPhases,
         summaryDiv.className = 'result-item breakdown-summary';
         const summaryLabel = document.createElement('span');
         summaryLabel.className = 'result-label';
-        summaryLabel.textContent = `總共 ${simulationResult.totalDays} 天，觸發氣場 ${simulationResult.auraDaysCount} 次`;
+        summaryLabel.textContent = simulationResult.auraDaysCount > 0
+            ? `總共 ${simulationResult.totalDays} 天，觸發氣場 ${simulationResult.auraDaysCount} 次`
+            : `總共 ${simulationResult.totalDays} 天`;
         summaryDiv.appendChild(summaryLabel);
         totalContent.appendChild(summaryDiv);
 
@@ -758,7 +747,7 @@ function findDailyTimeForTargetDays(totalExpNeeded, baseExpPerMin, regularMultip
 
 // Calculate and display results
 function calculateResults(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
 
     // Clear any previous custom validation messages
     currentLevelInput.setCustomValidity('');
@@ -771,44 +760,18 @@ function calculateResults(e) {
     const targetLevel = parseInt(targetLevelInput.value);
     const expEfficiency = parseInt(expEfficiencyInput.value);
 
-    // Validation
-    if (currentLevel < 1 || currentLevel > 200) {
-        currentLevelInput.setCustomValidity('現在等級必須在 1 到 200 之間');
-        currentLevelInput.reportValidity();
-        return;
-    }
+    // Validation — on invalid input, show zeros
+    const isValid = (
+        currentLevel >= 1 && currentLevel <= 200 &&
+        targetLevel >= 1 && targetLevel <= 200 &&
+        currentLevel < targetLevel &&
+        currentExp >= 0 &&
+        (currentLevel >= 200 || currentExp < (expData[currentLevel] ? expData[currentLevel].exp : Infinity)) &&
+        expEfficiency > 0
+    );
 
-    if (targetLevel < 1 || targetLevel > 200) {
-        targetLevelInput.setCustomValidity('目標等級必須在 1 到 200 之間');
-        targetLevelInput.reportValidity();
-        return;
-    }
-
-    if (currentLevel >= targetLevel) {
-        targetLevelInput.setCustomValidity('目標等級必須大於現在等級');
-        targetLevelInput.reportValidity();
-        return;
-    }
-
-    if (currentExp < 0) {
-        currentExpInput.setCustomValidity('現在EXP不能小於 0');
-        currentExpInput.reportValidity();
-        return;
-    }
-
-    // Validate current exp is less than exp needed to level up
-    if (currentLevel < 200) {
-        const expNeededForNextLevel = expData[currentLevel].exp;
-        if (currentExp >= expNeededForNextLevel) {
-            currentExpInput.setCustomValidity(`現在EXP必須小於 ${formatNumber(expNeededForNextLevel)} (等級 ${currentLevel + 1} 所需經驗值)`);
-            currentExpInput.reportValidity();
-            return;
-        }
-    }
-
-    if (expEfficiency <= 0) {
-        expEfficiencyInput.setCustomValidity('經驗效率必須大於 0');
-        expEfficiencyInput.reportValidity();
+    if (!isValid) {
+        resetResultsToZero();
         return;
     }
 
@@ -864,7 +827,7 @@ function calculateResults(e) {
     let scheduleDailyMinutes = 0;
     let scheduleTargetDays = 0;
 
-    if (currentMode === 'advanced' && isScheduleEnabled && scheduleMode) {
+    if (isScheduleEnabled && scheduleMode) {
         if (scheduleMode.value === 'daily') {
             scheduleDailyMinutes = getDailyGrindingMinutes();
         } else if (scheduleMode.value === 'target') {
@@ -872,7 +835,13 @@ function calculateResults(e) {
         }
     }
 
-    const useAuraSimulation = hasAura && (scheduleDailyMinutes > 0 || scheduleTargetDays > 0);
+    // Always run day-by-day simulation when schedule is active (not just when aura is on)
+    const useScheduleSimulation = isScheduleEnabled && scheduleMode &&
+        (scheduleDailyMinutes > 0 || scheduleTargetDays > 0);
+
+    // When aura is off, pass 0 aura days to disable aura in simulation
+    const simAuraMultiplier = hasAura ? auraMultiplier : 0;
+    const simAuraTotalDays = hasAura ? auraTotalDays : 0;
 
     // Build list of active events (coupon + custom only; aura handled in simulation)
     const activeEvents = [];
@@ -883,8 +852,8 @@ function calculateResults(e) {
     let totalTimeMinutes = 0;
     let simulationResult = null;
 
-    if (useAuraSimulation) {
-        // Day-by-day simulation path (aura + schedule)
+    if (useScheduleSimulation) {
+        // Day-by-day simulation path (schedule active, with or without aura)
         const globalEvents = [];
         if (hasCoupon) globalEvents.push({ name: 'coupon', remainingMinutes: couponMinutes, multiplier: couponMultiplier });
         if (hasCustom) globalEvents.push({ name: 'custom', remainingMinutes: customMinutes, multiplier: customMultiplier });
@@ -892,23 +861,23 @@ function calculateResults(e) {
         if (scheduleDailyMinutes > 0) {
             simulationResult = simulateDayByDay(
                 totalExpNeeded, baseExpEfficiency / 10, regularMultiplier,
-                auraMultiplier, globalEvents, scheduleDailyMinutes, auraTotalDays
+                simAuraMultiplier, globalEvents, scheduleDailyMinutes, simAuraTotalDays
             );
             totalTimeMinutes = simulationResult.totalGrindingMinutes;
         } else if (scheduleTargetDays > 0) {
             const optimalDailyMinutes = findDailyTimeForTargetDays(
                 totalExpNeeded, baseExpEfficiency / 10, regularMultiplier,
-                auraMultiplier, globalEvents, scheduleTargetDays, auraTotalDays
+                simAuraMultiplier, globalEvents, scheduleTargetDays, simAuraTotalDays
             );
             simulationResult = simulateDayByDay(
                 totalExpNeeded, baseExpEfficiency / 10, regularMultiplier,
-                auraMultiplier, globalEvents.map(e => ({ ...e })), optimalDailyMinutes, auraTotalDays
+                simAuraMultiplier, globalEvents.map(e => ({ ...e })), optimalDailyMinutes, simAuraTotalDays
             );
             simulationResult._computedDailyMinutes = optimalDailyMinutes;
             totalTimeMinutes = simulationResult.totalGrindingMinutes;
         }
     } else {
-        // Continuous calculation path (no aura, existing logic)
+        // Continuous calculation path (no schedule, existing logic)
         let remainingExp = totalExpNeeded;
 
         if (activeEvents.length > 0) {
@@ -966,7 +935,8 @@ function calculateResults(e) {
         expPercentage = (currentExp / expNeededForNextLevel) * 100;
     }
 
-    // Display results
+    // Clear invalid state and display results
+    resultsDiv.classList.remove('invalid');
     startLevelSpan.textContent = `${currentLevel} (${formatNumber(currentExp)} [${expPercentage.toFixed(2)}%])`;
     endLevelSpan.textContent = `${targetLevel}`;
     totalExpSpan.textContent = formatNumber(totalExpNeeded);
@@ -998,19 +968,21 @@ function calculateResults(e) {
         timeNeededRow.classList.remove('has-sub');
     }
 
-    // Show/hide advanced-only result fields based on mode
+    // Always show regular bonus
     const regularBonusRow = document.getElementById('regularBonusRow');
-    if (currentMode === 'simple') {
-        regularBonusRow.classList.add('hidden');
-    } else {
-        regularBonusRow.classList.remove('hidden');
-        document.getElementById('regularBonus').textContent = `+${regularMultiplier}%`;
-    }
+    regularBonusRow.classList.remove('hidden');
+    document.getElementById('regularBonus').textContent = `+${regularMultiplier}%`;
 
-    // Show/hide event breakdown with detailed phases (only in advanced mode)
+    // Show/hide event breakdown with detailed phases
     const eventBreakdown = document.getElementById('eventTimeBreakdown');
-    if (currentMode === 'advanced' && hasEvents) {
+    if (simulationResult) {
+        // Day-by-day simulation: always show breakdown when schedule is active
         renderEventBreakdown(eventBreakdown, simulationResult, eventPhases,
+                             couponMultiplier, auraMultiplier, customMultiplier);
+        eventBreakdown.classList.remove('hidden');
+    } else if (hasEvents) {
+        // Continuous mode with events (no schedule)
+        renderEventBreakdown(eventBreakdown, null, eventPhases,
                              couponMultiplier, auraMultiplier, customMultiplier);
         eventBreakdown.classList.remove('hidden');
     } else {
@@ -1024,7 +996,7 @@ function calculateResults(e) {
     const scheduleLabelEl = document.getElementById('scheduleLabel');
     const scheduleValueEl = document.getElementById('scheduleValue');
 
-    if (currentMode === 'advanced' && isScheduleEnabled && scheduleMode) {
+    if (isScheduleEnabled && scheduleMode) {
         if (simulationResult) {
             // Simulation path: use simulation result for schedule display
             if (scheduleMode.value === 'daily' && scheduleDailyMinutes > 0) {
@@ -1149,11 +1121,6 @@ function loadFromLocalStorage() {
         try {
             const formData = JSON.parse(savedData);
 
-            // Mode
-            if (formData.mode !== undefined) {
-                toggleMode(formData.mode);
-            }
-
             // Basic inputs
             if (formData.currentLevel) currentLevelInput.value = formData.currentLevel;
             if (formData.currentExp) currentExpInput.value = formData.currentExp;
@@ -1276,10 +1243,6 @@ function initEventListeners() {
     form.addEventListener('submit', calculateResults);
     unitManBtn.addEventListener('click', () => toggleUnit('man'));
     unitRegularBtn.addEventListener('click', () => toggleUnit('regular'));
-
-    // Mode toggle event listeners
-    document.getElementById('modeSimple').addEventListener('click', () => toggleMode('simple'));
-    document.getElementById('modeAdvanced').addEventListener('click', () => toggleMode('advanced'));
 
     // Advanced options collapsible toggle
     document.getElementById('advancedOptionsToggle').addEventListener('click', () => {
@@ -1411,6 +1374,31 @@ function initEventListeners() {
             hideManageModal();
         }
     });
+
+    // Auto-update results on any input change (desktop always-visible results)
+    const autoCalc = () => calculateResults();
+    currentLevelInput.addEventListener('input', autoCalc);
+    currentExpInput.addEventListener('input', autoCalc);
+    targetLevelInput.addEventListener('input', autoCalc);
+    expEfficiencyInput.addEventListener('input', autoCalc);
+
+    // Advanced options: recalculate on any change
+    document.querySelectorAll('input[name="holySymbol"]').forEach(r => r.addEventListener('change', autoCalc));
+    document.querySelectorAll('input[name="showdown"]').forEach(r => r.addEventListener('change', autoCalc));
+    expCouponCheckbox.addEventListener('change', autoCalc);
+    document.querySelectorAll('input[name="couponType"]').forEach(r => r.addEventListener('change', autoCalc));
+    document.getElementById('couponCount').addEventListener('input', autoCalc);
+    customEventCheckbox.addEventListener('change', autoCalc);
+    document.getElementById('customBonus').addEventListener('input', autoCalc);
+    document.getElementById('customDuration').addEventListener('input', autoCalc);
+    enableScheduleCheckbox.addEventListener('change', autoCalc);
+    document.querySelectorAll('input[name="scheduleMode"]').forEach(r => r.addEventListener('change', autoCalc));
+    document.getElementById('dailyHours').addEventListener('input', autoCalc);
+    document.getElementById('dailyMinutes').addEventListener('input', autoCalc);
+    document.getElementById('targetDays').addEventListener('input', autoCalc);
+    dailyAuraCheckbox.addEventListener('change', autoCalc);
+    document.querySelectorAll('input[name="auraType"]').forEach(r => r.addEventListener('change', autoCalc));
+    document.getElementById('auraDays').addEventListener('input', autoCalc);
 }
 
 // Initialize DOM elements
@@ -1474,7 +1462,12 @@ function init() {
     const showExpGain = localStorage.getItem('artaleShowExpGain') === 'true';
     document.getElementById('showExpGain').checked = showExpGain;
 
-    if (localStorage.getItem('artaleHistoryOpen') === 'true') {
+    // Desktop: always show history panel + chart; Mobile: restore saved state
+    const isDesktop = window.matchMedia('(min-width: 769px)').matches;
+    if (isDesktop) {
+        document.getElementById('historyPanel').classList.remove('hidden');
+        renderHistoryChart();
+    } else if (localStorage.getItem('artaleHistoryOpen') === 'true') {
         document.getElementById('historyPanel').classList.remove('hidden');
         renderHistoryChart();
     }
@@ -1488,6 +1481,9 @@ function init() {
     setTimeout(() => {
         isInitializing = false;
     }, 100);
+
+    // Run initial calculation to populate results with saved values (or zeros)
+    calculateResults();
 }
 
 // Run initialization when DOM is ready
@@ -1556,8 +1552,18 @@ function recordLevelExp() {
         }
     }
 
-    const timestamp = Date.now();
     const totalExp = calculateTotalExp(currentLevel, currentExp);
+
+    // Check that progress hasn't gone backwards compared to last record
+    if (levelHistory.length > 0) {
+        const lastRecord = levelHistory[levelHistory.length - 1];
+        if (totalExp < lastRecord.totalExp) {
+            alert(`記錄失敗：目前進度 (Lv.${currentLevel}, EXP ${formatNumber(currentExp)}) 低於上一筆紀錄 (Lv.${lastRecord.level}, EXP ${formatNumber(lastRecord.exp)})`);
+            return;
+        }
+    }
+
+    const timestamp = Date.now();
 
     levelHistory.push({
         timestamp: timestamp,

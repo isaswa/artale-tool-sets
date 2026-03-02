@@ -449,13 +449,17 @@
     const totals = calculateTotals(event, state);
 
     return `
-      <div class="event" data-event-id="${event.id}">
-        ${renderTimeInfo(event)}
-        ${renderSummary(event, state, totals)}
-        ${renderCheckin(event, state)}
-        ${renderTasks(event, state)}
-        ${renderShop(event, state)}
-        ${renderResetButton(event)}
+      <div class="event event-columns" data-event-id="${event.id}">
+        <div class="event-col-left">
+          ${renderTimeInfo(event)}
+          ${renderSummary(event, state, totals)}
+          ${renderCheckin(event, state)}
+          ${renderShop(event, state)}
+          ${renderResetButton(event)}
+        </div>
+        <div class="event-col-right">
+          ${renderTasks(event, state)}
+        </div>
       </div>
     `;
   }
