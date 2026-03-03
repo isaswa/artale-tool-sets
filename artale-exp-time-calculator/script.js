@@ -942,12 +942,12 @@ function calculateResults(e) {
     totalExpSpan.textContent = formatNumber(totalExpNeeded);
     timeNeededSpan.textContent = formatTime(totalTimeMinutes);
 
-    // Show/hide next level sub-rows (only when target is 2+ levels above current)
+    // Show next level sub-rows when there's at least 1 level to gain
     const nextLevelExpItem = document.getElementById('nextLevelExpItem');
     const nextLevelTimeItem = document.getElementById('nextLevelTimeItem');
     const totalExpRow = document.getElementById('totalExpRow');
     const timeNeededRow = timeNeededSpan.closest('.result-item');
-    if (targetLevel - currentLevel >= 2) {
+    if (targetLevel - currentLevel >= 1) {
         const expToNextLevel = expData[currentLevel].exp - currentExp;
         const nextLevelMinutes = totalTimeMinutes * (expToNextLevel / totalExpNeeded);
         const nextLevelLabel = `到下個等級(Lv.${currentLevel + 1}):`;
