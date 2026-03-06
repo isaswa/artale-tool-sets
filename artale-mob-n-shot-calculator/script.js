@@ -75,7 +75,7 @@ function init() {
   updateVenomInfo();
 
   // Save on every input change
-  const allInputs = [strInput, dexInput, intInput, lukInput, atkMinInput, atkMaxInput,
+  const allInputs = [strInput, dexInput, intInput, lukInput, atkMaxInput,
     skillLevelInput, venomLevelInput, buffCustomWatk];
   allInputs.forEach(el => el.addEventListener('input', saveToStorage));
   jobSelect.addEventListener('change', onJobChange);
@@ -96,7 +96,7 @@ function init() {
   });
 
   // Sanitize stat/range inputs on blur: clamp to non-negative integer
-  [strInput, dexInput, intInput, lukInput, atkMinInput, atkMaxInput].forEach(el =>
+  [strInput, dexInput, intInput, lukInput, atkMaxInput].forEach(el =>
     el.addEventListener('blur', () => {
       el.value = Math.max(0, Math.floor(parseFloat(el.value) || 0));
       saveToStorage();
@@ -108,7 +108,7 @@ function init() {
   );
 
   // Listeners
-  [strInput, dexInput, intInput, lukInput, atkMinInput, atkMaxInput].forEach(el => {
+  [strInput, dexInput, intInput, lukInput, atkMaxInput].forEach(el => {
     el.addEventListener('input', updateWATK);
     el.addEventListener('input', updateBuffedRange);
   });
@@ -282,16 +282,26 @@ function updateWatkHint() {
 function updateWATK() {
   const job = getSelectedJob();
   const weapon = getSelectedWeapon();
-  if (!job || !weapon) { watkValue.textContent = '-'; return; }
+  if (!job || !weapon) {
+    watkValue.textContent = '-';
+    atkMinInput.value = 0;
+    return;
+  }
 
   const { main, secondary } = getStatValues(job);
   const maxAtk = num(atkMaxInput);
   const denom = main * weapon.max_multiplier + secondary;
   if (denom === 0 || maxAtk === 0) {
     watkValue.textContent = '-';
+    atkMinInput.value = 0;
     return;
   }
-  watkValue.textContent = Math.round(maxAtk * 100 / denom);
+  const watk = Math.round(maxAtk * 100 / denom);
+  watkValue.textContent = watk;
+
+  // Auto-calculate MIN from derived WATK
+  const minCoeff = main * weapon.min_multiplier * 0.9 * job.mastery + secondary;
+  atkMinInput.value = Math.floor(minCoeff * watk / 100);
 }
 
 function updateMonsterInfo() {
@@ -649,7 +659,6 @@ function saveToStorage() {
     dex: dexInput.value,
     int: intInput.value,
     luk: lukInput.value,
-    atkMin: atkMinInput.value,
     atkMax: atkMaxInput.value,
     monster: monsterSelect.value,
     skill: skillSelect.value,
@@ -674,7 +683,6 @@ function loadFromStorage() {
     if (data.dex !== undefined) dexInput.value = data.dex;
     if (data.int !== undefined) intInput.value = data.int;
     if (data.luk !== undefined) lukInput.value = data.luk;
-    if (data.atkMin !== undefined) atkMinInput.value = data.atkMin;
     if (data.atkMax !== undefined) atkMaxInput.value = data.atkMax;
     if (data.monster !== undefined) monsterSelect.value = data.monster;
     // skill is restored after populateSkills

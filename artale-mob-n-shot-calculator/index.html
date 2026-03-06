@@ -58,10 +58,10 @@
       <hr>
 
       <div class="form-group">
-        <label>攻擊力 (Attack Range): 乾淨表攻</label>
-        <div class="hint" style="margin-bottom: 6px">請輸入練功時乾淨表攻 (包含楓祝)</div>
+        <label for="atk-max">攻擊力 (Attack Range): 乾淨表攻</label>
+        <div class="hint" style="margin-bottom: 6px">請輸入最大攻擊力 (包含楓祝)，MIN 和 WATK 會自動推算</div>
         <div class="range-inputs">
-          <input type="number" id="atk-min" value="1000" min="0" placeholder="MIN">
+          <input type="number" id="atk-min" value="0" min="0" placeholder="MIN" readonly tabindex="-1">
           <span class="range-separator">~</span>
           <input type="number" id="atk-max" value="2000" min="0" placeholder="MAX">
         </div>
