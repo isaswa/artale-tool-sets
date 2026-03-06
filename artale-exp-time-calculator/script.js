@@ -949,7 +949,53 @@ function calculateResults(e) {
     const timeNeededRow = timeNeededSpan.closest('.result-item');
     if (targetLevel - currentLevel >= 1) {
         const expToNextLevel = expData[currentLevel].exp - currentExp;
-        const nextLevelMinutes = totalTimeMinutes * (expToNextLevel / totalExpNeeded);
+
+        // Calculate time to next level independently (events/coupons front-loaded)
+        let nextLevelMinutes;
+        if (useScheduleSimulation) {
+            // Re-run day-by-day simulation with just the next-level exp
+            const nlEvents = [];
+            if (hasCoupon) nlEvents.push({ name: 'coupon', remainingMinutes: couponMinutes, multiplier: couponMultiplier });
+            if (hasCustom) nlEvents.push({ name: 'custom', remainingMinutes: customMinutes, multiplier: customMultiplier });
+            const nlDaily = scheduleDailyMinutes > 0
+                ? scheduleDailyMinutes
+                : simulationResult._computedDailyMinutes;
+            const nlResult = simulateDayByDay(
+                expToNextLevel, baseExpEfficiency / 10, regularMultiplier,
+                simAuraMultiplier, nlEvents, nlDaily, simAuraTotalDays, false
+            );
+            nextLevelMinutes = nlResult.totalGrindingMinutes;
+        } else {
+            // Continuous: front-load events for just the next level
+            let nlRemaining = expToNextLevel;
+            nextLevelMinutes = 0;
+            if (activeEvents.length > 0) {
+                let nlTime = 0;
+                let nlEvents = [...activeEvents];
+                while (nlEvents.length > 0 && nlRemaining > 0) {
+                    const totalMult = nlEvents.reduce((sum, e) => sum + e.multiplier, 0);
+                    const expRate = baseExpEfficiency * (100 + regularMultiplier + totalMult) / (100 + regularMultiplier);
+                    const expPerMin = expRate / 10;
+                    const nextExp = Math.min(...nlEvents.map(e => e.duration));
+                    const phaseDur = nextExp - nlTime;
+                    const expInPhase = expPerMin * phaseDur;
+                    if (expInPhase >= nlRemaining) {
+                        nextLevelMinutes += nlRemaining / expPerMin;
+                        nlRemaining = 0;
+                        break;
+                    } else {
+                        nextLevelMinutes += phaseDur;
+                        nlRemaining -= expInPhase;
+                        nlTime = nextExp;
+                        nlEvents = nlEvents.filter(e => e.duration > nlTime);
+                    }
+                }
+            }
+            if (nlRemaining > 0) {
+                nextLevelMinutes += nlRemaining / (regularExpPerTenMin / 10);
+            }
+        }
+
         const nextLevelLabel = `到下個等級(Lv.${currentLevel + 1}):`;
 
         nextLevelExpItem.querySelector('.result-label').textContent = nextLevelLabel;
