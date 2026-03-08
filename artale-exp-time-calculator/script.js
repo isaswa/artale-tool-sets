@@ -26,6 +26,8 @@ let lastSimulationResult = null;
 let lastCouponMultiplier = 0;
 let lastAuraMultiplier = 0;
 let lastCustomMultiplier = 0;
+// Cache params for per-level date breakdown modal
+let lastLevelBreakdownParams = null;
 
 // Helper: get daily grinding minutes from HH/MM inputs (capped at 24:00)
 function getDailyGrindingMinutes() {
@@ -103,35 +105,93 @@ function toggleScheduleEnabled() {
 // Toggle schedule mode inputs
 function toggleScheduleMode() {
     const scheduleMode = document.querySelector('input[name="scheduleMode"]:checked');
-    if (scheduleMode && scheduleMode.value === 'daily') {
-        dailyGrindingInput.classList.remove('hidden');
-        targetDaysInput.classList.add('hidden');
-    } else if (scheduleMode && scheduleMode.value === 'target') {
-        dailyGrindingInput.classList.add('hidden');
-        targetDaysInput.classList.remove('hidden');
+    const targetDateInput = document.getElementById('targetDateInput');
+    dailyGrindingInput.classList.add('hidden');
+    targetDaysInput.classList.add('hidden');
+    targetDateInput.classList.add('hidden');
+
+    if (scheduleMode) {
+        if (scheduleMode.value === 'targetDate') targetDateInput.classList.remove('hidden');
+        else if (scheduleMode.value === 'daily') dailyGrindingInput.classList.remove('hidden');
+        else if (scheduleMode.value === 'target') targetDaysInput.classList.remove('hidden');
     }
     updateScheduleWarning();
     updateAuraWarning();
+}
+
+// Sync aura due date → auraDays input
+function syncAuraDueDate() {
+    const dueDateInput = document.getElementById('auraDueDate');
+    const auraDaysInput = document.getElementById('auraDays');
+    const info = document.getElementById('auraDueDateInfo');
+    if (!dueDateInput.value) {
+        info.style.display = 'none';
+        return;
+    }
+    const target = new Date(dueDateInput.value + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+        auraDaysInput.value = diffDays;
+        info.textContent = `還剩下 ${diffDays} 天`;
+        info.style.display = 'block';
+    } else {
+        auraDaysInput.value = 0;
+        info.textContent = '已過期';
+        info.style.display = 'block';
+    }
+}
+
+// Get number of days from today to the selected target date
+function getTargetDateDays() {
+    const dateInput = document.getElementById('targetDate');
+    if (!dateInput.value) return 0;
+    const target = new Date(dateInput.value + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffMs = target - today;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
 }
 
 // Update schedule input warning
 function updateScheduleWarning() {
     const scheduleWarning = document.getElementById('scheduleWarning');
     const targetDaysWarning = document.getElementById('targetDaysWarning');
+    const targetDateWarning = document.getElementById('targetDateWarning');
+    const targetDateDaysInfo = document.getElementById('targetDateDays');
     if (!enableScheduleCheckbox.checked) {
         scheduleWarning.style.display = 'none';
         targetDaysWarning.style.display = 'none';
+        targetDateWarning.style.display = 'none';
+        targetDateDaysInfo.style.display = 'none';
         return;
     }
     const scheduleMode = document.querySelector('input[name="scheduleMode"]:checked');
-    if (scheduleMode && scheduleMode.value === 'daily') {
+    // Reset all warnings
+    scheduleWarning.style.display = 'none';
+    targetDaysWarning.style.display = 'none';
+    targetDateWarning.style.display = 'none';
+    targetDateDaysInfo.style.display = 'none';
+
+    if (scheduleMode && scheduleMode.value === 'targetDate') {
+        const dateInput = document.getElementById('targetDate');
+        if (dateInput.value) {
+            const days = getTargetDateDays();
+            if (days <= 0) {
+                targetDateWarning.style.display = 'block';
+            } else {
+                targetDateDaysInfo.textContent = `還剩下 ${days} 天`;
+                targetDateDaysInfo.style.display = 'block';
+            }
+        }
+    } else if (scheduleMode && scheduleMode.value === 'daily') {
         const dailyMinutes = getDailyGrindingMinutes();
         scheduleWarning.style.display = dailyMinutes <= 0 ? 'block' : 'none';
-        targetDaysWarning.style.display = 'none';
     } else if (scheduleMode && scheduleMode.value === 'target') {
         const targetDays = parseInt(document.getElementById('targetDays').value) || 0;
         targetDaysWarning.style.display = targetDays <= 0 ? 'block' : 'none';
-        scheduleWarning.style.display = 'none';
     }
 }
 
@@ -222,7 +282,9 @@ function resetResultsToZero() {
     document.getElementById('eventTimeBreakdown').innerHTML = '';
     document.getElementById('eventTimeBreakdown').classList.add('hidden');
     document.getElementById('scheduleResult').classList.add('hidden');
+    document.getElementById('levelBreakdownBtn').classList.add('hidden');
     lastSimulationResult = null;
+    lastLevelBreakdownParams = null;
 }
 
 // Format number with commas
@@ -832,6 +894,8 @@ function calculateResults(e) {
             scheduleDailyMinutes = getDailyGrindingMinutes();
         } else if (scheduleMode.value === 'target') {
             scheduleTargetDays = parseInt(document.getElementById('targetDays').value) || 0;
+        } else if (scheduleMode.value === 'targetDate') {
+            scheduleTargetDays = getTargetDateDays();
         }
     }
 
@@ -1041,19 +1105,33 @@ function calculateResults(e) {
     const scheduleResultDiv = document.getElementById('scheduleResult');
     const scheduleLabelEl = document.getElementById('scheduleLabel');
     const scheduleValueEl = document.getElementById('scheduleValue');
+    const levelBreakdownBtn = document.getElementById('levelBreakdownBtn');
+    levelBreakdownBtn.classList.add('hidden');
 
     if (isScheduleEnabled && scheduleMode) {
+        const isTargetMode = scheduleMode.value === 'target' || scheduleMode.value === 'targetDate';
         if (simulationResult) {
             // Simulation path: use simulation result for schedule display
             if (scheduleMode.value === 'daily' && scheduleDailyMinutes > 0) {
                 scheduleLabelEl.textContent = '所需天數:';
                 scheduleValueEl.textContent = `${simulationResult.totalDays} 天 (每日 ${formatTime(scheduleDailyMinutes)})`;
                 scheduleResultDiv.classList.remove('hidden');
-            } else if (scheduleMode.value === 'target' && scheduleTargetDays > 0) {
+            } else if (isTargetMode && scheduleTargetDays > 0) {
                 const computedMinutes = Math.ceil(simulationResult._computedDailyMinutes);
                 scheduleLabelEl.textContent = '每日所需時間:';
                 scheduleValueEl.textContent = `${formatTime(computedMinutes)} (共 ${scheduleTargetDays} 天)`;
                 scheduleResultDiv.classList.remove('hidden');
+                // Show magnifying glass for per-level breakdown
+                levelBreakdownBtn.classList.remove('hidden');
+                // Store params for the level breakdown modal
+                lastLevelBreakdownParams = {
+                    currentLevel, currentExp, targetLevel,
+                    baseExpPerMin: baseExpEfficiency / 10, regularMultiplier,
+                    simAuraMultiplier, simAuraTotalDays,
+                    hasCoupon, couponMinutes, couponMultiplier,
+                    hasCustom, customMinutes, customMultiplier,
+                    dailyMinutes: simulationResult._computedDailyMinutes
+                };
             } else {
                 scheduleResultDiv.classList.add('hidden');
             }
@@ -1068,16 +1146,11 @@ function calculateResults(e) {
             } else {
                 scheduleResultDiv.classList.add('hidden');
             }
-        } else if (scheduleMode.value === 'target') {
-            const targetDaysVal = parseInt(document.getElementById('targetDays').value) || 0;
-            if (targetDaysVal > 0) {
-                const minutesPerDay = Math.ceil(totalTimeMinutes / targetDaysVal);
-                scheduleLabelEl.textContent = '每日所需時間:';
-                scheduleValueEl.textContent = `${formatTime(minutesPerDay)} (共 ${targetDaysVal} 天)`;
-                scheduleResultDiv.classList.remove('hidden');
-            } else {
-                scheduleResultDiv.classList.add('hidden');
-            }
+        } else if (isTargetMode && scheduleTargetDays > 0) {
+            const minutesPerDay = Math.ceil(totalTimeMinutes / scheduleTargetDays);
+            scheduleLabelEl.textContent = '每日所需時間:';
+            scheduleValueEl.textContent = `${formatTime(minutesPerDay)} (共 ${scheduleTargetDays} 天)`;
+            scheduleResultDiv.classList.remove('hidden');
         } else {
             scheduleResultDiv.classList.add('hidden');
         }
@@ -1147,13 +1220,15 @@ function saveToLocalStorage() {
         customDuration: document.getElementById('customDuration').value,
         // Advanced options - grinding schedule
         enableSchedule: enableScheduleCheckbox.checked,
-        scheduleMode: scheduleMode ? scheduleMode.value : 'daily',
+        scheduleMode: scheduleMode ? scheduleMode.value : 'targetDate',
+        targetDate: document.getElementById('targetDate').value,
         dailyHours: document.getElementById('dailyHours').value,
         dailyMinutes: document.getElementById('dailyMinutes').value,
         targetDays: document.getElementById('targetDays').value,
         dailyAura: dailyAuraCheckbox.checked,
         auraType: auraType ? auraType.value : '2x',
-        auraDays: document.getElementById('auraDays').value
+        auraDays: document.getElementById('auraDays').value,
+        auraDueDate: document.getElementById('auraDueDate').value
     };
 
     localStorage.setItem('artaleCalcData', JSON.stringify(formData));
@@ -1237,6 +1312,10 @@ function loadFromLocalStorage() {
                 formData.dailyMinutes = String(totalMinutes % 60);
             }
 
+            if (formData.targetDate !== undefined) {
+                document.getElementById('targetDate').value = formData.targetDate;
+            }
+
             if (formData.dailyHours !== undefined) {
                 document.getElementById('dailyHours').value = formData.dailyHours;
             }
@@ -1263,6 +1342,11 @@ function loadFromLocalStorage() {
                 document.getElementById('auraDays').value = formData.auraDays;
             }
 
+            if (formData.auraDueDate) {
+                document.getElementById('auraDueDate').value = formData.auraDueDate;
+                syncAuraDueDate(); // Recompute days from saved due date
+            }
+
             // Now apply toggles (which depend on loaded values for warning checks)
             if (formData.enableSchedule !== undefined) {
                 enableScheduleCheckbox.checked = formData.enableSchedule;
@@ -1282,6 +1366,49 @@ function loadFromLocalStorage() {
     }
 }
 
+
+// Show per-level date breakdown modal
+function showLevelBreakdown() {
+    const p = lastLevelBreakdownParams;
+    if (!p) return;
+
+    const list = document.getElementById('levelBreakdownList');
+    list.innerHTML = '';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Simulate cumulative exp to each level to get accurate dates
+    let cumulativeExp = 0;
+    for (let level = p.currentLevel; level < p.targetLevel; level++) {
+        const expForLevel = level === p.currentLevel
+            ? expData[level].exp - p.currentExp
+            : expData[level].exp;
+        cumulativeExp += expForLevel;
+
+        const events = [];
+        if (p.hasCoupon) events.push({ name: 'coupon', remainingMinutes: p.couponMinutes, multiplier: p.couponMultiplier });
+        if (p.hasCustom) events.push({ name: 'custom', remainingMinutes: p.customMinutes, multiplier: p.customMultiplier });
+
+        const result = simulateDayByDay(
+            cumulativeExp, p.baseExpPerMin, p.regularMultiplier,
+            p.simAuraMultiplier, events, p.dailyMinutes, p.simAuraTotalDays, false
+        );
+
+        const reachDate = new Date(today);
+        reachDate.setDate(reachDate.getDate() + result.totalDays);
+        const dateStr = reachDate.toLocaleDateString('zh-TW', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+
+        const item = document.createElement('div');
+        item.className = 'level-breakdown-item';
+        item.innerHTML = `<span class="level-label">Lv.${level + 1}</span><span class="level-date">${dateStr}</span>`;
+        list.appendChild(item);
+    }
+
+    document.getElementById('levelBreakdownModal').classList.remove('hidden');
+}
 
 // Initialize event listeners
 function initEventListeners() {
@@ -1367,6 +1494,21 @@ function initEventListeners() {
         updateScheduleWarning();
         saveToLocalStorage();
     });
+    document.getElementById('targetDate').addEventListener('change', () => {
+        updateScheduleWarning();
+        saveToLocalStorage();
+    });
+
+    // Level breakdown modal
+    document.getElementById('levelBreakdownBtn').addEventListener('click', showLevelBreakdown);
+    document.getElementById('closeLevelBreakdown').addEventListener('click', () => {
+        document.getElementById('levelBreakdownModal').classList.add('hidden');
+    });
+    document.getElementById('levelBreakdownModal').addEventListener('click', (e) => {
+        if (e.target.id === 'levelBreakdownModal') {
+            e.target.classList.add('hidden');
+        }
+    });
 
     // Daily aura related
     dailyAuraCheckbox.addEventListener('change', () => {
@@ -1377,7 +1519,16 @@ function initEventListeners() {
     document.querySelectorAll('input[name="auraType"]').forEach(radio => {
         radio.addEventListener('change', saveToLocalStorage);
     });
-    document.getElementById('auraDays').addEventListener('input', saveToLocalStorage);
+    document.getElementById('auraDays').addEventListener('input', () => {
+        // Manual edit clears due date
+        document.getElementById('auraDueDate').value = '';
+        document.getElementById('auraDueDateInfo').style.display = 'none';
+        saveToLocalStorage();
+    });
+    document.getElementById('auraDueDate').addEventListener('change', () => {
+        syncAuraDueDate();
+        saveToLocalStorage();
+    });
 
     // Save to localStorage when basic inputs change
     currentLevelInput.addEventListener('input', saveToLocalStorage);
@@ -1442,9 +1593,11 @@ function initEventListeners() {
     document.getElementById('dailyHours').addEventListener('input', autoCalc);
     document.getElementById('dailyMinutes').addEventListener('input', autoCalc);
     document.getElementById('targetDays').addEventListener('input', autoCalc);
+    document.getElementById('targetDate').addEventListener('change', autoCalc);
     dailyAuraCheckbox.addEventListener('change', autoCalc);
     document.querySelectorAll('input[name="auraType"]').forEach(r => r.addEventListener('change', autoCalc));
     document.getElementById('auraDays').addEventListener('input', autoCalc);
+    document.getElementById('auraDueDate').addEventListener('change', autoCalc);
 }
 
 // Initialize DOM elements

@@ -244,7 +244,11 @@
                         <div id="scheduleContent" class="schedule-content hidden">
                             <div class="radio-group">
                                 <label>
-                                    <input type="radio" name="scheduleMode" value="daily" checked>
+                                    <input type="radio" name="scheduleMode" value="targetDate" checked>
+                                    目標日期
+                                </label>
+                                <label>
+                                    <input type="radio" name="scheduleMode" value="daily">
                                     每日練功
                                 </label>
                                 <label>
@@ -254,8 +258,18 @@
                             </div>
 
                             <div id="scheduleInputs" class="schedule-inputs">
+                                <!-- Target date option (default) -->
+                                <div id="targetDateInput" class="schedule-option">
+                                    <label class="input-label">
+                                        目標日期:
+                                        <input type="date" id="targetDate" class="date-input">
+                                    </label>
+                                    <span id="targetDateDays" class="schedule-info" style="display:none;"></span>
+                                    <span id="targetDateWarning" class="schedule-warning" style="display:none;">請選擇未來的日期</span>
+                                </div>
+
                                 <!-- Daily grinding option -->
-                                <div id="dailyGrindingInput" class="schedule-option">
+                                <div id="dailyGrindingInput" class="schedule-option hidden">
                                     <label class="input-label">每日練功時間:</label>
                                     <div class="time-hm-input">
                                         <input type="number" id="dailyHours" min="0" max="23" step="1" value="1" class="small-input">
@@ -294,11 +308,18 @@
                                             3x (+200%)
                                         </label>
                                     </div>
-                                    <label class="input-label">
-                                        剩餘天數:
-                                        <input type="number" id="auraDays" value="-1" class="small-input">
-                                        (天, -1 = 無限制)
-                                    </label>
+                                    <div class="aura-days-group">
+                                        <label class="input-label">
+                                            剩餘天數:
+                                            <input type="number" id="auraDays" value="-1" class="small-input">
+                                            (天, -1 = 無限制)
+                                        </label>
+                                        <label class="input-label">
+                                            或 到期日:
+                                            <input type="date" id="auraDueDate" class="date-input">
+                                        </label>
+                                        <span id="auraDueDateInfo" class="schedule-info" style="display:none;"></span>
+                                    </div>
                                     <span id="auraWarning" class="schedule-warning" style="display:none;">如果每日練功時間低於1小時，氣場的計算可能會有較大誤差</span>
                                 </div>
                             </div>
@@ -311,6 +332,25 @@
                 <div class="result-item">
                     <span class="result-label" id="scheduleLabel">練功排程:</span>
                     <span id="scheduleValue" class="result-value">0</span>
+                    <button id="levelBreakdownBtn" class="level-breakdown-btn hidden" aria-label="查看等級預估日期" title="查看等級預估日期">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Level Breakdown Modal -->
+            <div id="levelBreakdownModal" class="level-breakdown-modal hidden">
+                <div class="level-breakdown-modal-content">
+                    <div class="level-breakdown-modal-header">
+                        <h4>預估各等級達成日期</h4>
+                        <button id="closeLevelBreakdown" class="close-level-breakdown" aria-label="關閉">&times;</button>
+                    </div>
+                    <div class="level-breakdown-modal-body">
+                        <div id="levelBreakdownList" class="level-breakdown-list"></div>
+                    </div>
                 </div>
             </div>
 
