@@ -581,22 +581,26 @@ function simulateOnce(playerMin, playerMax, monster, skillPercent, hits, latency
       const t = nextCast;
       castCount++;
 
+      // Venom: each hit rolls independently, but at most 1 stack per cast
+      let venomProc = false;
       for (let h = 0; h < hits; h++) {
         const atk = randInt(playerMin, playerMax);
         const dmg = Math.max(1, Math.floor((atk - 0.55 * wDef) * pctMul));
         hp -= dmg;
 
-        // Venom proc check per hit
-        if (venomOn) {
-          pruneStacks(venomStacks, t);
-          if (Math.random() < venomParams.successRate) {
-            if (venomStacks.length >= venomParams.maxStack) {
-              venomStacks.shift(); // drop oldest
-            }
-            venomStacks.push(t + venomParams.duration);
-          }
+        if (venomOn && !venomProc && Math.random() < venomParams.successRate) {
+          venomProc = true;
         }
         if (hp <= 0) break;
+      }
+
+      // Apply at most 1 venom stack per cast
+      if (venomOn && venomProc) {
+        pruneStacks(venomStacks, t);
+        if (venomStacks.length >= venomParams.maxStack) {
+          venomStacks.shift(); // drop oldest
+        }
+        venomStacks.push(t + venomParams.duration);
       }
 
       nextCast += latency;
