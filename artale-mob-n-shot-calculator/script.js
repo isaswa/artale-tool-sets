@@ -324,16 +324,18 @@ function updateStatTotals() {
   intTotal.textContent = bases.INT + extras.INT;
   lukTotal.textContent = bases.LUK + extras.LUK;
 
-  // MW info: show how much of extra comes from MW
-  const mwPct = calcMWPercent();
-  if (mwPct > 0) {
-    const b = calcMWBonus(bases, mwPct);
-    mwInfo.innerHTML =
-      `楓葉祝福 +${mwPct}%: ` +
-      `STR <b>+${b.STR}</b> ｜ DEX <b>+${b.DEX}</b> ｜ ` +
-      `INT <b>+${b.INT}</b> ｜ LUK <b>+${b.LUK}</b>`;
+  // MW info: always show, dimmed when disabled
+  const mwLevelVal = parseInt(mwLevel.value) || 30;
+  const mwPctDisplay = Math.ceil(mwLevelVal / 2);
+  const b = mwEnabled.checked ? calcMWBonus(bases, mwPctDisplay) : { STR: 0, DEX: 0, INT: 0, LUK: 0 };
+  mwInfo.innerHTML =
+    `楓葉祝福 +${mwPctDisplay}%: ` +
+    `STR <b>+${b.STR}</b> ｜ DEX <b>+${b.DEX}</b> ｜ ` +
+    `INT <b>+${b.INT}</b> ｜ LUK <b>+${b.LUK}</b>`;
+  if (mwEnabled.checked) {
+    mwInfo.removeAttribute('data-disabled');
   } else {
-    mwInfo.innerHTML = '';
+    mwInfo.setAttribute('data-disabled', '');
   }
 }
 
