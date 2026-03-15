@@ -160,8 +160,11 @@
         <hr>
 
         <div class="form-group">
-          <label>模擬比較 <span class="hint">(0 = 不模擬)</span></label>
-          <div class="sim-mode-grid">
+          <label class="sim-compare-header">
+            <span>模擬比較</span>
+            <input type="checkbox" id="sim-compare-enabled" class="sim-toggle">
+          </label>
+          <div class="sim-mode-grid" id="sim-mode-area">
             <label class="radio-row" for="sim-mode-levelup">
               <input type="radio" name="sim-mode" id="sim-mode-levelup" value="levelup" checked>
               <span>模擬升級</span>

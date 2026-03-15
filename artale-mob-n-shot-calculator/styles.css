@@ -301,6 +301,50 @@ hr {
   margin: 0;
 }
 
+.sim-compare-header {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sim-toggle {
+  width: 36px;
+  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--input-border);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.sim-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.sim-toggle:checked {
+  background: var(--accent);
+}
+
+.sim-toggle:checked::after {
+  transform: translateX(16px);
+}
+
+.sim-mode-grid[data-disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .sim-mode-grid {
   display: grid;
   grid-template-columns: 1fr auto auto auto;

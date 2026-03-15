@@ -13,7 +13,7 @@ let monsterInfo, skillInfo, venomInfo;
 let buffTakoyaki, buffSnowflake, buffCustomEnabled, buffCustomWatk;
 let buffedRangeValue, buffedWatkRow, buffedWatkValue;
 let wipMessage, implementedArea, venomArea;
-let simModeLevelUp, simModeWatk, levelUpInput, watkSimInput;
+let simCompareEnabled, simModeArea, simModeLevelUp, simModeWatk, levelUpInput, watkSimInput;
 let calculateBtn, resultsDiv;
 
 // Module-level state for comparison click handlers
@@ -68,6 +68,8 @@ function init() {
   wipMessage = document.getElementById('wip-message');
   implementedArea = document.getElementById('implemented-area');
   venomArea = document.getElementById('venom-area');
+  simCompareEnabled = document.getElementById('sim-compare-enabled');
+  simModeArea = document.getElementById('sim-mode-area');
   simModeLevelUp = document.getElementById('sim-mode-levelup');
   simModeWatk = document.getElementById('sim-mode-watk');
   levelUpInput = document.getElementById('levelup-count');
@@ -91,6 +93,7 @@ function init() {
   if (saved.skill) skillSelect.value = saved.skill;
 
   // Update all displays
+  updateSimModeUI();
   updateJobUI();
   updateStatTotals();
   updateWATK();
@@ -104,6 +107,10 @@ function init() {
   const allInputs = [...allStatInputs, atkMaxInput,
     skillLevelInput, venomLevelInput, buffCustomWatk, levelUpInput, watkSimInput];
   allInputs.forEach(el => el.addEventListener('input', saveToStorage));
+  simCompareEnabled.addEventListener('change', () => {
+    updateSimModeUI();
+    saveToStorage();
+  });
   simModeLevelUp.addEventListener('change', saveToStorage);
   simModeWatk.addEventListener('change', saveToStorage);
   // Auto-select radio when typing in its number input
@@ -394,6 +401,14 @@ function onWeaponChange() {
   updateWATK();
   updateBuffedRange();
   saveToStorage();
+}
+
+function updateSimModeUI() {
+  if (simCompareEnabled.checked) {
+    simModeArea.removeAttribute('data-disabled');
+  } else {
+    simModeArea.setAttribute('data-disabled', '');
+  }
 }
 
 function updateJobUI() {
@@ -697,7 +712,29 @@ function onCalculate() {
   const venomLevel = parseInt(venomLevelInput.value) || 0;
 
   const simMode = document.querySelector('input[name="sim-mode"]:checked').value;
-  const simSteps = simMode === 'levelup' ? num(levelUpInput) : num(watkSimInput);
+  const simSteps = simCompareEnabled.checked
+    ? (simMode === 'levelup' ? num(levelUpInput) : num(watkSimInput))
+    : 0;
+
+  if (simCompareEnabled.checked && simSteps <= 0) {
+    const input = simMode === 'levelup' ? levelUpInput : watkSimInput;
+    input.classList.add('input-invalid');
+    let tip = input.parentElement.querySelector('.validation-tip');
+    if (!tip) {
+      tip = document.createElement('span');
+      tip.className = 'validation-tip';
+      input.parentElement.appendChild(tip);
+    }
+    tip.textContent = '請輸入大於 0 的數值';
+    input.focus();
+    const clearInvalid = () => {
+      input.classList.remove('input-invalid');
+      if (tip.parentElement) tip.remove();
+      input.removeEventListener('input', clearInvalid);
+    };
+    input.addEventListener('input', clearInvalid);
+    return;
+  }
 
   // Derive WATK (constant property of the weapon, doesn't change with level)
   const watk = deriveWATK();
@@ -984,6 +1021,7 @@ function saveToStorage() {
     buffSnowflake: buffSnowflake.checked,
     buffCustomEnabled: buffCustomEnabled.checked,
     buffCustomWatk: buffCustomWatk.value,
+    simCompareEnabled: simCompareEnabled.checked,
     simMode: document.querySelector('input[name="sim-mode"]:checked').value,
     levelUpCount: levelUpInput.value,
     watkSimCount: watkSimInput.value
@@ -1022,6 +1060,7 @@ function loadFromStorage() {
     if (data.buffSnowflake !== undefined) buffSnowflake.checked = data.buffSnowflake;
     if (data.buffCustomEnabled !== undefined) buffCustomEnabled.checked = data.buffCustomEnabled;
     if (data.buffCustomWatk !== undefined) buffCustomWatk.value = data.buffCustomWatk;
+    if (data.simCompareEnabled !== undefined) simCompareEnabled.checked = data.simCompareEnabled;
     if (data.simMode === 'watk') simModeWatk.checked = true;
     if (data.levelUpCount !== undefined) levelUpInput.value = data.levelUpCount;
     if (data.watkSimCount !== undefined) watkSimInput.value = data.watkSimCount;
