@@ -39,21 +39,32 @@
       </div>
 
       <div class="stat-row">
-        <label class="stat-label str" for="str">力量 STR</label>
-        <input type="number" id="str" value="4" min="0">
+        <label class="stat-label str">力量 STR</label>
+        <span class="stat-total" id="str-total">4</span>
+        <span class="stat-breakdown">(<input type="number" id="str-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="str-extra" value="0" min="0" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
-        <label class="stat-label dex" for="dex">敏捷 DEX</label>
-        <input type="number" id="dex" value="25" min="0">
+        <label class="stat-label dex">敏捷 DEX</label>
+        <span class="stat-total" id="dex-total">25</span>
+        <span class="stat-breakdown">(<input type="number" id="dex-base" value="25" min="0" class="stat-part-input"> + <input type="number" id="dex-extra" value="0" min="0" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
-        <label class="stat-label int" for="int">智力 INT</label>
-        <input type="number" id="int" value="4" min="0">
+        <label class="stat-label int">智力 INT</label>
+        <span class="stat-total" id="int-total">4</span>
+        <span class="stat-breakdown">(<input type="number" id="int-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="int-extra" value="0" min="0" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
-        <label class="stat-label luk" for="luk">幸運 LUK</label>
-        <input type="number" id="luk" value="300" min="0">
+        <label class="stat-label luk">幸運 LUK</label>
+        <span class="stat-total" id="luk-total">300</span>
+        <span class="stat-breakdown">(<input type="number" id="luk-base" value="300" min="0" class="stat-part-input"> + <input type="number" id="luk-extra" value="0" min="0" class="stat-part-input">)</span>
       </div>
+
+      <label class="checkbox-row" style="margin-top: 4px">
+        <input type="checkbox" id="mw-enabled">
+        <span>已套用楓葉祝福 Lv.</span>
+        <input type="number" id="mw-level" value="30" min="1" max="30" style="width: 50px; padding: 3px 6px; font-size: 13px; text-align: center;">
+      </label>
+      <div class="info-box" id="mw-info" style="margin-top: 6px"></div>
 
       <hr>
 
@@ -144,6 +155,14 @@
             <input type="number" id="venom-level" value="1" min="0" max="30">
           </div>
           <div class="info-box" id="venom-info"></div>
+        </div>
+
+        <hr>
+
+        <div class="form-group">
+          <label for="levelup-count">模擬升級</label>
+          <div class="hint">每級 +5 主屬性AP，比較不同等級的擊殺效率 (0 = 不模擬)</div>
+          <input type="number" id="levelup-count" value="0" min="0" max="50">
         </div>
 
         <button id="calculate-btn">計算</button>

@@ -2,7 +2,9 @@
 const STORAGE_KEY = 'nshot-inputs';
 
 // === DOM references (assigned in init) ===
-let strInput, dexInput, intInput, lukInput;
+let strBase, strExtra, strTotal, dexBase, dexExtra, dexTotal;
+let intBase, intExtra, intTotal, lukBase, lukExtra, lukTotal;
+let mwEnabled, mwLevel, mwInfo;
 let atkMinInput, atkMaxInput;
 let watkValue, watkHint;
 let jobSelect, weaponGroup, weaponSelect;
@@ -11,6 +13,7 @@ let monsterInfo, skillInfo, venomInfo;
 let buffTakoyaki, buffSnowflake, buffCustomEnabled, buffCustomWatk;
 let buffedRangeValue, buffedWatkRow, buffedWatkValue;
 let wipMessage, implementedArea, venomArea;
+let levelUpInput;
 let calculateBtn, resultsDiv;
 
 // ============================================================
@@ -18,11 +21,23 @@ let calculateBtn, resultsDiv;
 // ============================================================
 
 function init() {
-  // Cache DOM
-  strInput = document.getElementById('str');
-  dexInput = document.getElementById('dex');
-  intInput = document.getElementById('int');
-  lukInput = document.getElementById('luk');
+  // Cache DOM — stats (base + extra + total)
+  strBase = document.getElementById('str-base');
+  strExtra = document.getElementById('str-extra');
+  strTotal = document.getElementById('str-total');
+  dexBase = document.getElementById('dex-base');
+  dexExtra = document.getElementById('dex-extra');
+  dexTotal = document.getElementById('dex-total');
+  intBase = document.getElementById('int-base');
+  intExtra = document.getElementById('int-extra');
+  intTotal = document.getElementById('int-total');
+  lukBase = document.getElementById('luk-base');
+  lukExtra = document.getElementById('luk-extra');
+  lukTotal = document.getElementById('luk-total');
+  mwEnabled = document.getElementById('mw-enabled');
+  mwLevel = document.getElementById('mw-level');
+  mwInfo = document.getElementById('mw-info');
+
   atkMinInput = document.getElementById('atk-min');
   atkMaxInput = document.getElementById('atk-max');
   watkValue = document.getElementById('watk-value');
@@ -48,6 +63,7 @@ function init() {
   wipMessage = document.getElementById('wip-message');
   implementedArea = document.getElementById('implemented-area');
   venomArea = document.getElementById('venom-area');
+  levelUpInput = document.getElementById('levelup-count');
   calculateBtn = document.getElementById('calculate-btn');
   resultsDiv = document.getElementById('results');
 
@@ -68,6 +84,7 @@ function init() {
 
   // Update all displays
   updateJobUI();
+  updateStatTotals();
   updateWATK();
   updateBuffedRange();
   updateMonsterInfo();
@@ -75,8 +92,9 @@ function init() {
   updateVenomInfo();
 
   // Save on every input change
-  const allInputs = [strInput, dexInput, intInput, lukInput, atkMaxInput,
-    skillLevelInput, venomLevelInput, buffCustomWatk];
+  const allStatInputs = [strBase, strExtra, dexBase, dexExtra, intBase, intExtra, lukBase, lukExtra];
+  const allInputs = [...allStatInputs, atkMaxInput,
+    skillLevelInput, venomLevelInput, buffCustomWatk, levelUpInput];
   allInputs.forEach(el => el.addEventListener('input', saveToStorage));
   jobSelect.addEventListener('change', onJobChange);
   weaponSelect.addEventListener('change', onWeaponChange);
@@ -84,6 +102,20 @@ function init() {
   skillSelect.addEventListener('change', saveToStorage);
   venomEnabledCheck.addEventListener('change', saveToStorage);
   venomEnabledCheck.addEventListener('change', updateVenomInfo);
+  mwEnabled.addEventListener('change', () => {
+    saveToStorage();
+    updateStatTotals();
+    updateWATK();
+    updateBuffedRange();
+    updateVenomInfo();
+  });
+  mwLevel.addEventListener('input', () => {
+    saveToStorage();
+    updateStatTotals();
+    updateWATK();
+    updateBuffedRange();
+    updateVenomInfo();
+  });
   const buffCheckboxes = [buffTakoyaki, buffSnowflake, buffCustomEnabled];
   buffCheckboxes.forEach(cb => {
     cb.addEventListener('change', () => {
@@ -96,7 +128,7 @@ function init() {
   });
 
   // Sanitize stat/range inputs on blur: clamp to non-negative integer
-  [strInput, dexInput, intInput, lukInput, atkMaxInput].forEach(el =>
+  [...allStatInputs, atkMaxInput].forEach(el =>
     el.addEventListener('blur', () => {
       el.value = Math.max(0, Math.floor(parseFloat(el.value) || 0));
       saveToStorage();
@@ -107,13 +139,17 @@ function init() {
     el.addEventListener('input', () => validateSkillLevel(el))
   );
 
-  // Listeners
-  [strInput, dexInput, intInput, lukInput, atkMaxInput].forEach(el => {
+  // Listeners — stat changes cascade
+  allStatInputs.forEach(el => {
+    el.addEventListener('input', updateStatTotals);
     el.addEventListener('input', updateWATK);
     el.addEventListener('input', updateBuffedRange);
   });
+  atkMaxInput.addEventListener('input', updateWATK);
+  atkMaxInput.addEventListener('input', updateBuffedRange);
   buffCustomWatk.addEventListener('input', updateBuffedRange);
-  [strInput, dexInput, lukInput].forEach(el =>
+  // Venom depends on STR, DEX, LUK totals
+  [strBase, strExtra, dexBase, dexExtra, lukBase, lukExtra].forEach(el =>
     el.addEventListener('input', updateVenomInfo)
   );
   monsterSelect.addEventListener('change', updateMonsterInfo);
@@ -177,6 +213,86 @@ function populateSkills(jobId) {
 }
 
 // ============================================================
+// Stat calculation (base + extra + MW)
+// ============================================================
+
+/** Get raw base stats from inputs */
+function getBaseStats() {
+  return {
+    STR: num(strBase), DEX: num(dexBase), INT: num(intBase), LUK: num(lukBase)
+  };
+}
+
+/** Get extra (equipment) stats from inputs */
+function getExtraStats() {
+  return {
+    STR: num(strExtra), DEX: num(dexExtra), INT: num(intExtra), LUK: num(lukExtra)
+  };
+}
+
+/** Calculate MW bonus percentage: ceil(level / 2) */
+function calcMWPercent() {
+  if (!mwEnabled.checked) return 0;
+  const level = parseInt(mwLevel.value) || 0;
+  if (level <= 0) return 0;
+  return Math.ceil(level / 2);
+}
+
+/** Calculate MW bonus for each stat (based on base stats) */
+function calcMWBonus(bases, pct) {
+  if (pct === 0) return { STR: 0, DEX: 0, INT: 0, LUK: 0 };
+  return {
+    STR: Math.floor(bases.STR * pct / 100),
+    DEX: Math.floor(bases.DEX * pct / 100),
+    INT: Math.floor(bases.INT * pct / 100),
+    LUK: Math.floor(bases.LUK * pct / 100)
+  };
+}
+
+/**
+ * Get total stat values. extraMainAP adds to the main stat's BASE
+ * (for level-up simulation: each level = +5 AP to main stat).
+ */
+function getAllStatTotals(extraMainAP) {
+  const bases = getBaseStats();
+  const extras = getExtraStats();
+  if (extraMainAP > 0) {
+    const job = getSelectedJob();
+    if (job) bases[job.main_stat] += extraMainAP;
+  }
+  const mwPct = calcMWPercent();
+  const mwBonus = calcMWBonus(bases, mwPct);
+  return {
+    STR: bases.STR + extras.STR + mwBonus.STR,
+    DEX: bases.DEX + extras.DEX + mwBonus.DEX,
+    INT: bases.INT + extras.INT + mwBonus.INT,
+    LUK: bases.LUK + extras.LUK + mwBonus.LUK,
+    _mwBonus: mwBonus
+  };
+}
+
+/** Update the displayed total for each stat + MW info */
+function updateStatTotals() {
+  const totals = getAllStatTotals(0);
+  strTotal.textContent = totals.STR;
+  dexTotal.textContent = totals.DEX;
+  intTotal.textContent = totals.INT;
+  lukTotal.textContent = totals.LUK;
+
+  // MW info display
+  const mwPct = calcMWPercent();
+  if (mwPct > 0) {
+    const b = totals._mwBonus;
+    mwInfo.innerHTML =
+      `楓葉祝福 +${mwPct}%: ` +
+      `STR <b>+${b.STR}</b> ｜ DEX <b>+${b.DEX}</b> ｜ ` +
+      `INT <b>+${b.INT}</b> ｜ LUK <b>+${b.LUK}</b>`;
+  } else {
+    mwInfo.innerHTML = '';
+  }
+}
+
+// ============================================================
 // Job helpers
 // ============================================================
 
@@ -185,13 +301,8 @@ function getSelectedJob() {
 }
 
 /** Get main and secondary stat values for a given job */
-function getStatValues(job) {
-  const stats = {
-    STR: num(strInput),
-    DEX: num(dexInput),
-    INT: num(intInput),
-    LUK: num(lukInput)
-  };
+function getStatValues(job, extraMainAP) {
+  const stats = getAllStatTotals(extraMainAP || 0);
   const mainVal = stats[job.main_stat] || 0;
   let secVal;
   if (job.secondary_stat === 'STR+DEX') {
@@ -199,7 +310,7 @@ function getStatValues(job) {
   } else {
     secVal = stats[job.secondary_stat] || 0;
   }
-  return { main: mainVal, secondary: secVal };
+  return { main: mainVal, secondary: secVal, all: stats };
 }
 
 /** Get the currently selected weapon object for the current job */
@@ -232,6 +343,7 @@ function onJobChange() {
   populateWeapons(job);
   populateSkills(job.id);
   updateJobUI();
+  updateStatTotals();
   updateWATK();
   updateBuffedRange();
   updateSkillInfo();
@@ -304,6 +416,28 @@ function updateWATK() {
   atkMinInput.value = Math.floor(minCoeff * watk / 100);
 }
 
+/** Derive WATK from current stats + MAX input (used in level-up simulation) */
+function deriveWATK() {
+  const job = getSelectedJob();
+  const weapon = getSelectedWeapon();
+  if (!job || !weapon) return 0;
+  const { main, secondary } = getStatValues(job);
+  const maxAtk = num(atkMaxInput);
+  const denom = main * weapon.max_multiplier + secondary;
+  if (denom === 0 || maxAtk === 0) return 0;
+  return Math.round(maxAtk * 100 / denom);
+}
+
+/** Calculate attack range for given stats + WATK */
+function calcRangeFromWATK(job, weapon, main, secondary, watk) {
+  const maxCoeff = main * weapon.max_multiplier + secondary;
+  const minCoeff = main * weapon.min_multiplier * 0.9 * job.mastery + secondary;
+  return {
+    min: Math.floor(minCoeff * watk / 100),
+    max: Math.floor(maxCoeff * watk / 100)
+  };
+}
+
 function updateMonsterInfo() {
   const m = monsters[monsterSelect.value];
   if (!m) { monsterInfo.innerHTML = ''; return; }
@@ -329,7 +463,8 @@ function updateVenomInfo() {
     return;
   }
   if (isInvalidLevel(venomLevelInput)) { venomInfo.innerHTML = ''; return; }
-  const vp = calcVenomParams(level, num(strInput), num(dexInput), num(lukInput));
+  const stats = getAllStatTotals(0);
+  const vp = calcVenomParams(level, stats.STR, stats.DEX, stats.LUK);
   venomInfo.innerHTML =
     `Lv.${level}: 成功率 <b>${(vp.successRate * 100).toFixed(0)}%</b> ｜ ` +
     `持續 <b>${vp.duration}ms</b> ｜ 最大 <b>${vp.maxStack}</b> 層<br>` +
@@ -514,13 +649,16 @@ function onCalculate() {
   const skillLevel = clampLevel(skillLevelInput, skill);
 
   const job = getSelectedJob();
+  const weapon = getSelectedWeapon();
   const isThief = job && job.category === 'thief';
   const venomEnabled = isThief && venomEnabledCheck.checked;
   const venomLevel = parseInt(venomLevelInput.value) || 0;
-  let venomParams = null;
-  if (venomEnabled && venomLevel > 0) {
-    venomParams = calcVenomParams(venomLevel, num(strInput), num(dexInput), num(lukInput));
-  }
+
+  const levelUpCount = num(levelUpInput);
+
+  // Derive WATK (constant property of the weapon, doesn't change with level)
+  const watk = deriveWATK();
+  const buffWatk = getBuffWatk();
 
   // Show loading
   calculateBtn.disabled = true;
@@ -528,8 +666,51 @@ function onCalculate() {
 
   // Run async to let the UI update
   setTimeout(() => {
-    const distribution = runSimulation(playerMin, playerMax, monster, skill, skillLevel, venomParams);
-    displayResults(distribution, config.simulation_count);
+    const simResults = [];
+    const simCount = config.simulation_count;
+
+    for (let lv = 0; lv <= levelUpCount; lv++) {
+      const extraAP = lv * 5;
+      const { main, secondary, all: statTotals } = getStatValues(job, extraAP);
+
+      // Calculate range from WATK + new stats
+      let range;
+      if (lv === 0) {
+        // Use actual input values for current level (most accurate)
+        range = { min: playerMin, max: playerMax };
+      } else {
+        range = calcRangeFromWATK(job, weapon, main, secondary, watk);
+        // Apply buff
+        if (buffWatk > 0) {
+          const maxCoeff = main * weapon.max_multiplier + secondary;
+          const minCoeff = main * weapon.min_multiplier * 0.9 * job.mastery + secondary;
+          range.min += Math.floor(minCoeff * buffWatk / 100);
+          range.max += Math.floor(maxCoeff * buffWatk / 100);
+        }
+      }
+
+      // Venom params for this level's stats
+      let venomParams = null;
+      if (venomEnabled && venomLevel > 0) {
+        venomParams = calcVenomParams(venomLevel, statTotals.STR, statTotals.DEX, statTotals.LUK);
+      }
+
+      const distribution = runSimulation(range.min, range.max, monster, skill, skillLevel, venomParams);
+
+      // Calculate expected value
+      let expected = 0;
+      for (const k of Object.keys(distribution)) expected += k * distribution[k] / simCount;
+
+      simResults.push({
+        level: lv,
+        mainStat: main,
+        range: range,
+        expected: expected,
+        distribution: distribution
+      });
+    }
+
+    displayResults(simResults, simCount);
     calculateBtn.disabled = false;
   }, 20);
 }
@@ -538,7 +719,32 @@ function onCalculate() {
 // Display results
 // ============================================================
 
-function displayResults(distribution, total) {
+function displayResults(simResults, total) {
+  let html = '';
+
+  // Level-up comparison table (if more than just current level)
+  if (simResults.length > 1) {
+    const job = getSelectedJob();
+    const mainLabel = job ? job.main_stat : '主屬';
+    html += '<h3>升級比較</h3>';
+    html += '<table class="levelup-table">';
+    html += `<tr><th>等級</th><th>${mainLabel}</th><th>攻擊力</th><th>期望擊殺</th></tr>`;
+    for (const r of simResults) {
+      const cls = r.level === 0 ? ' class="current-level"' : '';
+      const label = r.level === 0 ? '目前' : `+${r.level}`;
+      html += `<tr${cls}>` +
+        `<td>${label}</td>` +
+        `<td>${r.mainStat}</td>` +
+        `<td>${r.range.min}~${r.range.max}</td>` +
+        `<td>${r.expected.toFixed(2)} 下</td>` +
+        `</tr>`;
+    }
+    html += '</table>';
+  }
+
+  // Detailed distribution for current level
+  const current = simResults[0];
+  const distribution = current.distribution;
   const keys = Object.keys(distribution).map(Number).sort((a, b) => a - b);
 
   // Find max percentage for bar scaling
@@ -548,7 +754,7 @@ function displayResults(distribution, total) {
     if (p > maxPct) maxPct = p;
   }
 
-  let html = '<h3>擊殺次數分佈</h3>';
+  html += '<h3>擊殺次數分佈</h3>';
 
   for (const shots of keys) {
     const count = distribution[shots];
@@ -565,12 +771,9 @@ function displayResults(distribution, total) {
   }
 
   // Expected value
-  let expected = 0;
-  for (const k of keys) expected += k * distribution[k] / total;
-
   html +=
     `<div class="result-summary">` +
-      `期望值: ${expected.toFixed(2)} 下擊殺<br>` +
+      `期望值: ${current.expected.toFixed(2)} 下擊殺<br>` +
       `模擬次數: ${total.toLocaleString()}` +
     `</div>`;
 
@@ -655,10 +858,16 @@ function saveToStorage() {
   const data = {
     job: jobSelect.value,
     weapon: weaponSelect.value,
-    str: strInput.value,
-    dex: dexInput.value,
-    int: intInput.value,
-    luk: lukInput.value,
+    strBase: strBase.value,
+    strExtra: strExtra.value,
+    dexBase: dexBase.value,
+    dexExtra: dexExtra.value,
+    intBase: intBase.value,
+    intExtra: intExtra.value,
+    lukBase: lukBase.value,
+    lukExtra: lukExtra.value,
+    mwEnabled: mwEnabled.checked,
+    mwLevel: mwLevel.value,
     atkMax: atkMaxInput.value,
     monster: monsterSelect.value,
     skill: skillSelect.value,
@@ -668,7 +877,8 @@ function saveToStorage() {
     buffTakoyaki: buffTakoyaki.checked,
     buffSnowflake: buffSnowflake.checked,
     buffCustomEnabled: buffCustomEnabled.checked,
-    buffCustomWatk: buffCustomWatk.value
+    buffCustomWatk: buffCustomWatk.value,
+    levelUpCount: levelUpInput.value
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
@@ -679,10 +889,21 @@ function loadFromStorage() {
   try {
     const data = JSON.parse(raw);
     if (data.job !== undefined) jobSelect.value = data.job;
-    if (data.str !== undefined) strInput.value = data.str;
-    if (data.dex !== undefined) dexInput.value = data.dex;
-    if (data.int !== undefined) intInput.value = data.int;
-    if (data.luk !== undefined) lukInput.value = data.luk;
+    // Backward compat: old format had single str/dex/int/luk → treat as base
+    if (data.strBase !== undefined) strBase.value = data.strBase;
+    else if (data.str !== undefined) strBase.value = data.str;
+    if (data.strExtra !== undefined) strExtra.value = data.strExtra;
+    if (data.dexBase !== undefined) dexBase.value = data.dexBase;
+    else if (data.dex !== undefined) dexBase.value = data.dex;
+    if (data.dexExtra !== undefined) dexExtra.value = data.dexExtra;
+    if (data.intBase !== undefined) intBase.value = data.intBase;
+    else if (data.int !== undefined) intBase.value = data.int;
+    if (data.intExtra !== undefined) intExtra.value = data.intExtra;
+    if (data.lukBase !== undefined) lukBase.value = data.lukBase;
+    else if (data.luk !== undefined) lukBase.value = data.luk;
+    if (data.lukExtra !== undefined) lukExtra.value = data.lukExtra;
+    if (data.mwEnabled !== undefined) mwEnabled.checked = data.mwEnabled;
+    if (data.mwLevel !== undefined) mwLevel.value = data.mwLevel;
     if (data.atkMax !== undefined) atkMaxInput.value = data.atkMax;
     if (data.monster !== undefined) monsterSelect.value = data.monster;
     // skill is restored after populateSkills
@@ -693,6 +914,7 @@ function loadFromStorage() {
     if (data.buffSnowflake !== undefined) buffSnowflake.checked = data.buffSnowflake;
     if (data.buffCustomEnabled !== undefined) buffCustomEnabled.checked = data.buffCustomEnabled;
     if (data.buffCustomWatk !== undefined) buffCustomWatk.value = data.buffCustomWatk;
+    if (data.levelUpCount !== undefined) levelUpInput.value = data.levelUpCount;
   } catch (e) {
     // Ignore corrupt data
   }

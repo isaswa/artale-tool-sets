@@ -149,18 +149,35 @@ body.light-theme .stat-label {
   background: #6aad6a;
 }
 
-.stat-row input[type="number"] {
-  flex: 1;
-  padding: 7px 10px;
+.stat-total {
+  font-size: 16px;
+  font-weight: bold;
+  min-width: 36px;
+  text-align: right;
+  color: var(--accent);
+}
+
+.stat-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.stat-part-input {
+  width: 56px;
+  padding: 4px 6px;
   border: 2px solid var(--input-border);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
   background: var(--input-bg);
   color: var(--text-color);
   transition: all 0.3s ease;
 }
 
-.stat-row input[type="number"]:focus {
+.stat-part-input:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -383,5 +400,35 @@ hr {
   text-align: center;
   padding: 16px;
   color: var(--text-muted);
+}
+
+/* Level-up comparison table */
+.levelup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.levelup-table th,
+.levelup-table td {
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--hr-color);
+}
+
+.levelup-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.levelup-table tr.current-level {
+  background: var(--info-bg);
+  font-weight: bold;
+}
+
+.levelup-table td:first-child {
+  text-align: left;
 }
 
