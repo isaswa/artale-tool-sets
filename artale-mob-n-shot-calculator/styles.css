@@ -233,12 +233,17 @@ hr {
   cursor: pointer;
 }
 
-.form-group .checkbox-row {
+.form-group .checkbox-row,
+.form-group .radio-row {
   display: flex;
   font-size: 14px;
   font-weight: normal;
   color: var(--text-color);
   margin-bottom: 6px;
+}
+
+.sim-mode-grid .radio-row {
+  margin-bottom: 0;
 }
 
 .form-group .checkbox-row:last-child {
@@ -257,6 +262,54 @@ hr {
   padding: 3px 6px;
   font-size: 13px;
   text-align: center;
+}
+
+/* Radio rows */
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--text-color);
+  margin-bottom: 6px;
+}
+
+.radio-row input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.inline-num {
+  width: 42px;
+  padding: 3px 4px;
+  font-size: 13px;
+  text-align: center;
+  border: 2px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  -moz-appearance: textfield;
+}
+
+.inline-num::-webkit-outer-spin-button,
+.inline-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.sim-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.sim-mode-input {
+  display: contents;
 }
 
 /* Info boxes */
@@ -428,7 +481,62 @@ hr {
   font-weight: bold;
 }
 
+.levelup-table tr[data-idx]:not(.current-level) {
+  cursor: pointer;
+}
+
+.levelup-table tr[data-idx]:not(.current-level):hover {
+  background: var(--info-bg);
+}
+
+.levelup-table tr.selected-level {
+  background: rgba(232, 168, 56, 0.2);
+  font-weight: bold;
+}
+
 .levelup-table td:first-child {
   text-align: left;
+}
+
+/* Comparison distribution */
+.result-bar-compare {
+  background: linear-gradient(90deg, #e8a838, #d4902a) !important;
+}
+
+.result-row-compare {
+  margin-top: -3px;
+  margin-bottom: 7px;
+}
+
+.result-row-compare .result-bar-container {
+  height: 18px;
+}
+
+.dist-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-current {
+  background: linear-gradient(90deg, #5a9bd5, #3a7fc0);
+}
+
+.legend-compare {
+  background: linear-gradient(90deg, #e8a838, #d4902a);
 }
 

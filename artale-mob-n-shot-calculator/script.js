@@ -13,8 +13,13 @@ let monsterInfo, skillInfo, venomInfo;
 let buffTakoyaki, buffSnowflake, buffCustomEnabled, buffCustomWatk;
 let buffedRangeValue, buffedWatkRow, buffedWatkValue;
 let wipMessage, implementedArea, venomArea;
-let levelUpInput;
+let simModeLevelUp, simModeWatk, levelUpInput, watkSimInput;
 let calculateBtn, resultsDiv;
+
+// Module-level state for comparison click handlers
+let lastSimResults = null;
+let lastSimTotal = 0;
+let lastSimMode = '';
 
 // ============================================================
 // Initialization
@@ -63,7 +68,10 @@ function init() {
   wipMessage = document.getElementById('wip-message');
   implementedArea = document.getElementById('implemented-area');
   venomArea = document.getElementById('venom-area');
+  simModeLevelUp = document.getElementById('sim-mode-levelup');
+  simModeWatk = document.getElementById('sim-mode-watk');
   levelUpInput = document.getElementById('levelup-count');
+  watkSimInput = document.getElementById('watk-sim-count');
   calculateBtn = document.getElementById('calculate-btn');
   resultsDiv = document.getElementById('results');
 
@@ -94,8 +102,13 @@ function init() {
   // Save on every input change
   const allStatInputs = [strBase, strExtra, dexBase, dexExtra, intBase, intExtra, lukBase, lukExtra];
   const allInputs = [...allStatInputs, atkMaxInput,
-    skillLevelInput, venomLevelInput, buffCustomWatk, levelUpInput];
+    skillLevelInput, venomLevelInput, buffCustomWatk, levelUpInput, watkSimInput];
   allInputs.forEach(el => el.addEventListener('input', saveToStorage));
+  simModeLevelUp.addEventListener('change', saveToStorage);
+  simModeWatk.addEventListener('change', saveToStorage);
+  // Auto-select radio when typing in its number input
+  levelUpInput.addEventListener('focus', () => { simModeLevelUp.checked = true; saveToStorage(); });
+  watkSimInput.addEventListener('focus', () => { simModeWatk.checked = true; saveToStorage(); });
   jobSelect.addEventListener('change', onJobChange);
   weaponSelect.addEventListener('change', onWeaponChange);
   monsterSelect.addEventListener('change', saveToStorage);
@@ -250,39 +263,64 @@ function calcMWBonus(bases, pct) {
 }
 
 /**
- * Get total stat values. extraMainAP adds to the main stat's BASE
- * (for level-up simulation: each level = +5 AP to main stat).
+ * Get total stat values.
+ *
+ * The user's EXTRA input already includes MW bonus (post-buff state).
+ * So for current level (extraMainAP=0): total = base + extra (as-is).
+ * For level-up simulation (extraMainAP>0): we subtract old MW bonus,
+ * add AP to base, recalculate new MW bonus, then:
+ *   total = newBase + (extra - oldMWBonus) + newMWBonus
  */
 function getAllStatTotals(extraMainAP) {
   const bases = getBaseStats();
   const extras = getExtraStats();
+  const mwPct = calcMWPercent();
+
+  if (extraMainAP > 0 && mwPct > 0) {
+    // MW is active and we're simulating level-up — recalculate MW delta
+    const oldMW = calcMWBonus(bases, mwPct);
+    const job = getSelectedJob();
+    if (job) bases[job.main_stat] += extraMainAP;
+    const newMW = calcMWBonus(bases, mwPct);
+    // extra already includes oldMW; replace with newMW
+    return {
+      STR: bases.STR + extras.STR - oldMW.STR + newMW.STR,
+      DEX: bases.DEX + extras.DEX - oldMW.DEX + newMW.DEX,
+      INT: bases.INT + extras.INT - oldMW.INT + newMW.INT,
+      LUK: bases.LUK + extras.LUK - oldMW.LUK + newMW.LUK,
+      _mwBonus: newMW, _mwOldBonus: oldMW
+    };
+  }
+
+  // No level-up or no MW: total = base + extra (extra already includes MW if active)
   if (extraMainAP > 0) {
     const job = getSelectedJob();
     if (job) bases[job.main_stat] += extraMainAP;
   }
-  const mwPct = calcMWPercent();
   const mwBonus = calcMWBonus(bases, mwPct);
   return {
-    STR: bases.STR + extras.STR + mwBonus.STR,
-    DEX: bases.DEX + extras.DEX + mwBonus.DEX,
-    INT: bases.INT + extras.INT + mwBonus.INT,
-    LUK: bases.LUK + extras.LUK + mwBonus.LUK,
+    STR: bases.STR + extras.STR,
+    DEX: bases.DEX + extras.DEX,
+    INT: bases.INT + extras.INT,
+    LUK: bases.LUK + extras.LUK,
     _mwBonus: mwBonus
   };
 }
 
 /** Update the displayed total for each stat + MW info */
 function updateStatTotals() {
-  const totals = getAllStatTotals(0);
-  strTotal.textContent = totals.STR;
-  dexTotal.textContent = totals.DEX;
-  intTotal.textContent = totals.INT;
-  lukTotal.textContent = totals.LUK;
+  const bases = getBaseStats();
+  const extras = getExtraStats();
+  // Total = base + extra (extra already includes MW)
+  strTotal.textContent = bases.STR + extras.STR;
+  dexTotal.textContent = bases.DEX + extras.DEX;
+  intTotal.textContent = bases.INT + extras.INT;
+  lukTotal.textContent = bases.LUK + extras.LUK;
 
-  // MW info display
+  // MW info: show how much of extra comes from MW
   const mwPct = calcMWPercent();
   if (mwPct > 0) {
-    const b = totals._mwBonus;
+    const b = calcMWBonus(bases, mwPct);
     mwInfo.innerHTML =
       `楓葉祝福 +${mwPct}%: ` +
       `STR <b>+${b.STR}</b> ｜ DEX <b>+${b.DEX}</b> ｜ ` +
@@ -658,7 +696,8 @@ function onCalculate() {
   const venomEnabled = isThief && venomEnabledCheck.checked;
   const venomLevel = parseInt(venomLevelInput.value) || 0;
 
-  const levelUpCount = num(levelUpInput);
+  const simMode = document.querySelector('input[name="sim-mode"]:checked').value;
+  const simSteps = simMode === 'levelup' ? num(levelUpInput) : num(watkSimInput);
 
   // Derive WATK (constant property of the weapon, doesn't change with level)
   const watk = deriveWATK();
@@ -673,18 +712,25 @@ function onCalculate() {
     const simResults = [];
     const simCount = config.simulation_count;
 
-    for (let lv = 0; lv <= levelUpCount; lv++) {
-      const extraAP = lv * 5;
-      const { main, secondary, all: statTotals } = getStatValues(job, extraAP);
+    for (let step = 0; step <= simSteps; step++) {
+      let main, secondary, statTotals, stepWatk;
 
-      // Calculate range from WATK + new stats
+      if (simMode === 'levelup') {
+        const sv = getStatValues(job, step * 5);
+        main = sv.main; secondary = sv.secondary; statTotals = sv.all;
+        stepWatk = watk;
+      } else {
+        const sv = getStatValues(job, 0);
+        main = sv.main; secondary = sv.secondary; statTotals = sv.all;
+        stepWatk = watk + step;
+      }
+
+      // Calculate range
       let range;
-      if (lv === 0) {
-        // Use actual input values for current level (most accurate)
+      if (step === 0) {
         range = { min: playerMin, max: playerMax };
       } else {
-        range = calcRangeFromWATK(job, weapon, main, secondary, watk);
-        // Apply buff
+        range = calcRangeFromWATK(job, weapon, main, secondary, stepWatk);
         if (buffWatk > 0) {
           const maxCoeff = main * weapon.max_multiplier + secondary;
           const minCoeff = main * weapon.min_multiplier * 0.9 * job.mastery + secondary;
@@ -693,7 +739,7 @@ function onCalculate() {
         }
       }
 
-      // Venom params for this level's stats
+      // Venom params (stats may differ in level-up mode)
       let venomParams = null;
       if (venomEnabled && venomLevel > 0) {
         venomParams = calcVenomParams(venomLevel, statTotals.STR, statTotals.DEX, statTotals.LUK);
@@ -701,20 +747,23 @@ function onCalculate() {
 
       const distribution = runSimulation(range.min, range.max, monster, skill, skillLevel, venomParams);
 
-      // Calculate expected value
       let expected = 0;
       for (const k of Object.keys(distribution)) expected += k * distribution[k] / simCount;
 
       simResults.push({
-        level: lv,
+        step,
         mainStat: main,
-        range: range,
-        expected: expected,
-        distribution: distribution
+        watk: stepWatk + buffWatk,
+        range,
+        expected,
+        distribution
       });
     }
 
-    displayResults(simResults, simCount);
+    lastSimResults = simResults;
+    lastSimTotal = simCount;
+    lastSimMode = simMode;
+    renderResults(simResults, simCount, simMode, -1);
     calculateBtn.disabled = false;
   }, 20);
 }
@@ -723,22 +772,30 @@ function onCalculate() {
 // Display results
 // ============================================================
 
-function displayResults(simResults, total) {
+function renderResults(simResults, total, mode, compareIdx) {
   let html = '';
 
-  // Level-up comparison table (if more than just current level)
+  // Comparison table (if more than just current level)
   if (simResults.length > 1) {
     const job = getSelectedJob();
     const mainLabel = job ? job.main_stat : '主屬';
-    html += '<h3>升級比較</h3>';
+    html += '<h3>模擬比較 <span class="hint">（點擊列以比較分佈）</span></h3>';
     html += '<table class="levelup-table">';
-    html += `<tr><th>等級</th><th>${mainLabel}</th><th>攻擊力</th><th>期望擊殺</th></tr>`;
-    for (const r of simResults) {
-      const cls = r.level === 0 ? ' class="current-level"' : '';
-      const label = r.level === 0 ? '目前' : `+${r.level}`;
-      html += `<tr${cls}>` +
+    if (mode === 'levelup') {
+      html += `<tr><th></th><th>${mainLabel}</th><th>攻擊力</th><th>期望擊殺</th></tr>`;
+    } else {
+      html += `<tr><th></th><th>WATK</th><th>攻擊力</th><th>期望擊殺</th></tr>`;
+    }
+    for (let i = 0; i < simResults.length; i++) {
+      const r = simResults[i];
+      const isCurrent = r.step === 0;
+      const isSelected = i === compareIdx;
+      let cls = isCurrent ? 'current-level' : (isSelected ? 'selected-level' : '');
+      const label = isCurrent ? '目前' : `+${r.step}`;
+      const colValue = mode === 'levelup' ? r.mainStat : r.watk;
+      html += `<tr class="${cls}" data-idx="${i}">` +
         `<td>${label}</td>` +
-        `<td>${r.mainStat}</td>` +
+        `<td>${colValue}</td>` +
         `<td>${r.range.min}~${r.range.max}</td>` +
         `<td>${r.expected.toFixed(2)} 下</td>` +
         `</tr>`;
@@ -746,42 +803,87 @@ function displayResults(simResults, total) {
     html += '</table>';
   }
 
-  // Detailed distribution for current level
+  // Distribution
   const current = simResults[0];
-  const distribution = current.distribution;
-  const keys = Object.keys(distribution).map(Number).sort((a, b) => a - b);
+  const compare = compareIdx > 0 ? simResults[compareIdx] : null;
+  const currentDist = current.distribution;
+  const compareDist = compare ? compare.distribution : null;
 
-  // Find max percentage for bar scaling
+  // Legend
+  if (compare) {
+    const stepLabel = mode === 'levelup' ? `+${compare.step}級` : `+${compare.step} WATK`;
+    html += '<h3>擊殺次數分佈</h3>';
+    html += `<div class="dist-legend">` +
+      `<span class="legend-item"><span class="legend-swatch legend-current"></span>目前 (${current.expected.toFixed(2)}下)</span>` +
+      `<span class="legend-item"><span class="legend-swatch legend-compare"></span>${stepLabel} (${compare.expected.toFixed(2)}下)</span>` +
+      `</div>`;
+  } else {
+    html += '<h3>擊殺次數分佈</h3>';
+  }
+
+  // Merge all shot counts from both distributions
+  const allKeys = new Set(Object.keys(currentDist).map(Number));
+  if (compareDist) Object.keys(compareDist).map(Number).forEach(k => allKeys.add(k));
+  const keys = [...allKeys].sort((a, b) => a - b);
+
+  // Max percentage across both for bar scaling
   let maxPct = 0;
   for (const k of keys) {
-    const p = distribution[k] / total * 100;
-    if (p > maxPct) maxPct = p;
+    const p1 = (currentDist[k] || 0) / total * 100;
+    if (p1 > maxPct) maxPct = p1;
+    if (compareDist) {
+      const p2 = (compareDist[k] || 0) / total * 100;
+      if (p2 > maxPct) maxPct = p2;
+    }
   }
-
-  html += '<h3>擊殺次數分佈</h3>';
 
   for (const shots of keys) {
-    const count = distribution[shots];
-    const pct = (count / total * 100).toFixed(2);
-    const barW = (count / total * 100 / maxPct * 100).toFixed(1); // relative to max
-    html +=
-      `<div class="result-row">` +
-        `<span class="result-label">${shots}下擊殺:</span>` +
-        `<span class="result-bar-container">` +
-          `<span class="result-bar" style="width:${barW}%"></span>` +
-        `</span>` +
-        `<span class="result-percent">${pct}%</span>` +
+    const count1 = currentDist[shots] || 0;
+    const pct1 = (count1 / total * 100).toFixed(2);
+    const barW1 = maxPct > 0 ? (count1 / total * 100 / maxPct * 100).toFixed(1) : '0';
+
+    html += `<div class="result-row">` +
+      `<span class="result-label">${shots}下擊殺:</span>` +
+      `<span class="result-bar-container">` +
+        `<span class="result-bar" style="width:${barW1}%"></span>` +
+      `</span>` +
+      `<span class="result-percent">${pct1}%</span>` +
       `</div>`;
+
+    if (compareDist) {
+      const count2 = compareDist[shots] || 0;
+      const pct2 = (count2 / total * 100).toFixed(2);
+      const barW2 = maxPct > 0 ? (count2 / total * 100 / maxPct * 100).toFixed(1) : '0';
+      html += `<div class="result-row result-row-compare">` +
+        `<span class="result-label"></span>` +
+        `<span class="result-bar-container">` +
+          `<span class="result-bar result-bar-compare" style="width:${barW2}%"></span>` +
+        `</span>` +
+        `<span class="result-percent">${pct2}%</span>` +
+        `</div>`;
+    }
   }
 
-  // Expected value
-  html +=
-    `<div class="result-summary">` +
-      `期望值: ${current.expected.toFixed(2)} 下擊殺<br>` +
-      `模擬次數: ${total.toLocaleString()}` +
-    `</div>`;
+  // Summary
+  html += `<div class="result-summary">`;
+  html += `期望值: ${current.expected.toFixed(2)} 下擊殺`;
+  if (compare) {
+    const stepLabel = mode === 'levelup' ? `+${compare.step}級` : `+${compare.step} WATK`;
+    html += ` → ${stepLabel}: ${compare.expected.toFixed(2)} 下`;
+  }
+  html += `<br>模擬次數: ${total.toLocaleString()}</div>`;
 
   resultsDiv.innerHTML = html;
+
+  // Attach click handlers to comparison rows
+  resultsDiv.querySelectorAll('.levelup-table tr[data-idx]').forEach(tr => {
+    const idx = parseInt(tr.dataset.idx);
+    if (idx === 0) return;
+    tr.addEventListener('click', () => {
+      const newIdx = compareIdx === idx ? -1 : idx;
+      renderResults(lastSimResults, lastSimTotal, lastSimMode, newIdx);
+    });
+  });
 }
 
 // ============================================================
@@ -882,7 +984,9 @@ function saveToStorage() {
     buffSnowflake: buffSnowflake.checked,
     buffCustomEnabled: buffCustomEnabled.checked,
     buffCustomWatk: buffCustomWatk.value,
-    levelUpCount: levelUpInput.value
+    simMode: document.querySelector('input[name="sim-mode"]:checked').value,
+    levelUpCount: levelUpInput.value,
+    watkSimCount: watkSimInput.value
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
@@ -918,7 +1022,9 @@ function loadFromStorage() {
     if (data.buffSnowflake !== undefined) buffSnowflake.checked = data.buffSnowflake;
     if (data.buffCustomEnabled !== undefined) buffCustomEnabled.checked = data.buffCustomEnabled;
     if (data.buffCustomWatk !== undefined) buffCustomWatk.value = data.buffCustomWatk;
+    if (data.simMode === 'watk') simModeWatk.checked = true;
     if (data.levelUpCount !== undefined) levelUpInput.value = data.levelUpCount;
+    if (data.watkSimCount !== undefined) watkSimInput.value = data.watkSimCount;
   } catch (e) {
     // Ignore corrupt data
   }

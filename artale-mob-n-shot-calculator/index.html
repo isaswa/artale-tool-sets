@@ -160,9 +160,24 @@
         <hr>
 
         <div class="form-group">
-          <label for="levelup-count">模擬升級</label>
-          <div class="hint">每級 +5 主屬性AP，比較不同等級的擊殺效率 (0 = 不模擬)</div>
-          <input type="number" id="levelup-count" value="0" min="0" max="50">
+          <label>模擬比較 <span class="hint">(0 = 不模擬)</span></label>
+          <div class="sim-mode-grid">
+            <label class="radio-row" for="sim-mode-levelup">
+              <input type="radio" name="sim-mode" id="sim-mode-levelup" value="levelup" checked>
+              <span>模擬升級</span>
+            </label>
+            <span>+</span>
+            <input type="number" id="levelup-count" value="0" min="0" max="50" class="inline-num">
+            <span>級 <span class="hint">(每級 +5 主屬AP)</span></span>
+
+            <label class="radio-row" for="sim-mode-watk">
+              <input type="radio" name="sim-mode" id="sim-mode-watk" value="watk">
+              <span>模擬增加攻擊</span>
+            </label>
+            <span>+</span>
+            <input type="number" id="watk-sim-count" value="0" min="0" max="50" class="inline-num">
+            <span>WATK</span>
+          </div>
         </div>
 
         <button id="calculate-btn">計算</button>
