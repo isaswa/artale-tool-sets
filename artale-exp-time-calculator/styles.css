@@ -1177,6 +1177,60 @@ body {
     border-bottom: none;
 }
 
+.today-exp-target {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--input-border);
+}
+
+.today-exp-target.hidden {
+    display: none;
+}
+
+.today-exp-row {
+    display: flex;
+    align-items: center;
+}
+
+.today-exp-row .result-label {
+    min-width: 40%;
+    flex-shrink: 0;
+}
+
+.today-exp-row .result-value {
+    flex: 1;
+}
+
+.today-exp-lock-btn {
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    background-color: var(--button-bg);
+    color: #fff;
+    transition: background-color 0.3s ease;
+}
+
+.today-exp-lock-btn:hover {
+    opacity: 0.85;
+}
+
+.today-exp-lock-btn.locked {
+    background-color: #e53935;
+}
+
+.today-exp-date {
+    display: block;
+    font-size: 12px;
+    color: var(--text-color);
+    opacity: 0.6;
+    margin-top: 4px;
+    padding-left: 40%;
+}
+
 /* Date input */
 .date-input {
     padding: 4px 8px;
@@ -1859,6 +1913,10 @@ body:not(.light-theme) .date-input {
     .breakdown-confirm-btn {
         font-size: 12px;
         padding: 5px 10px;
+    }
+
+    .today-exp-date {
+        padding-left: 0;
     }
 
 }

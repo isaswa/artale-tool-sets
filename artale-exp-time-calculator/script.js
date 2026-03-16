@@ -28,6 +28,9 @@ let lastAuraMultiplier = 0;
 let lastCustomMultiplier = 0;
 // Cache params for per-level date breakdown modal
 let lastLevelBreakdownParams = null;
+let todayExpLocked = false;
+let todayExpLockedValue = null;
+let todayExpLockedDate = null;
 
 // Helper: get daily grinding minutes from HH/MM inputs (capped at 24:00)
 function getDailyGrindingMinutes() {
@@ -132,9 +135,11 @@ function syncAuraDueDate() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-    if (diffDays > 0) {
-        auraDaysInput.value = diffDays;
-        info.textContent = `還剩下 ${diffDays} 天`;
+    // +1 to include today as an aura day
+    const inclusiveDays = diffDays > 0 ? diffDays + 1 : 0;
+    if (inclusiveDays > 0) {
+        auraDaysInput.value = inclusiveDays;
+        info.textContent = `還剩下 ${inclusiveDays} 天 (含今天)`;
         info.style.display = 'block';
     } else {
         auraDaysInput.value = 0;
@@ -143,7 +148,7 @@ function syncAuraDueDate() {
     }
 }
 
-// Get number of days from today to the selected target date
+// Get number of days from today to the selected target date (inclusive of today)
 function getTargetDateDays() {
     const dateInput = document.getElementById('targetDate');
     if (!dateInput.value) return 0;
@@ -152,7 +157,8 @@ function getTargetDateDays() {
     today.setHours(0, 0, 0, 0);
     const diffMs = target - today;
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
+    // +1 to include today as a grinding day
+    return diffDays > 0 ? diffDays + 1 : 0;
 }
 
 // Update schedule input warning
@@ -182,7 +188,7 @@ function updateScheduleWarning() {
             if (days <= 0) {
                 targetDateWarning.style.display = 'block';
             } else {
-                targetDateDaysInfo.textContent = `還剩下 ${days} 天`;
+                targetDateDaysInfo.textContent = `還剩下 ${days} 天 (含今天)`;
                 targetDateDaysInfo.style.display = 'block';
             }
         }
@@ -283,6 +289,7 @@ function resetResultsToZero() {
     document.getElementById('eventTimeBreakdown').classList.add('hidden');
     document.getElementById('scheduleResult').classList.add('hidden');
     document.getElementById('levelBreakdownBtn').classList.add('hidden');
+    document.getElementById('todayExpTarget').classList.add('hidden');
     lastSimulationResult = null;
     lastLevelBreakdownParams = null;
 }
@@ -1158,6 +1165,42 @@ function calculateResults(e) {
         scheduleResultDiv.classList.add('hidden');
     }
 
+    // Display today's EXP target
+    const todayExpTargetDiv = document.getElementById('todayExpTarget');
+    const todayExpValueEl = document.getElementById('todayExpValue');
+    const todayExpDateEl = document.getElementById('todayExpDate');
+    if (isScheduleEnabled && scheduleMode && !scheduleResultDiv.classList.contains('hidden')) {
+        if (todayExpLocked && todayExpLockedValue !== null) {
+            // Locked: show cached value and date
+            todayExpValueEl.textContent = formatNumber(todayExpLockedValue);
+            todayExpDateEl.textContent = todayExpLockedDate;
+            todayExpTargetDiv.classList.remove('hidden');
+        } else {
+            let effectiveDays = 0;
+            if (simulationResult) {
+                effectiveDays = simulationResult.totalDays;
+            } else if (scheduleMode.value === 'daily') {
+                const dm = getDailyGrindingMinutes();
+                effectiveDays = dm > 0 ? Math.ceil(totalTimeMinutes / dm) : 0;
+            } else if (scheduleTargetDays > 0) {
+                effectiveDays = scheduleTargetDays;
+            }
+            if (effectiveDays > 0) {
+                const dailyExpTarget = Math.ceil(totalExpNeeded / effectiveDays);
+                todayExpValueEl.textContent = formatNumber(dailyExpTarget);
+                const today = new Date();
+                todayExpDateEl.textContent = today.toLocaleDateString('zh-TW', {
+                    year: 'numeric', month: '2-digit', day: '2-digit'
+                });
+                todayExpTargetDiv.classList.remove('hidden');
+            } else {
+                todayExpTargetDiv.classList.add('hidden');
+            }
+        }
+    } else {
+        todayExpTargetDiv.classList.add('hidden');
+    }
+
     resultsDiv.classList.remove('hidden');
 
     // Save to localStorage
@@ -1396,7 +1439,8 @@ function showLevelBreakdown() {
         );
 
         const reachDate = new Date(today);
-        reachDate.setDate(reachDate.getDate() + result.totalDays);
+        // Day 1 in simulation = today, so offset by totalDays - 1
+        reachDate.setDate(reachDate.getDate() + result.totalDays - 1);
         const dateStr = reachDate.toLocaleDateString('zh-TW', {
             year: 'numeric', month: '2-digit', day: '2-digit'
         });
@@ -1408,6 +1452,90 @@ function showLevelBreakdown() {
     }
 
     document.getElementById('levelBreakdownModal').classList.remove('hidden');
+}
+
+// Toggle today's EXP target lock
+function toggleTodayExpLock() {
+    const btn = document.getElementById('todayExpLockBtn');
+    const valueEl = document.getElementById('todayExpValue');
+    const dateEl = document.getElementById('todayExpDate');
+
+    if (todayExpLocked) {
+        // Unlock: clear cached value, recalculate
+        todayExpLocked = false;
+        todayExpLockedValue = null;
+        todayExpLockedDate = null;
+        btn.classList.remove('locked');
+        btn.setAttribute('aria-label', '鎖定目標');
+        btn.setAttribute('title', '鎖定目標');
+        // Update SVG to unlocked icon
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v1"></path>
+        </svg>`;
+        saveTodayExpLock();
+        // Trigger recalculation
+        form.dispatchEvent(new Event('submit'));
+    } else {
+        // Lock: cache current displayed value
+        const currentText = valueEl.textContent;
+        const currentDate = dateEl.textContent;
+        if (!currentText || currentText === '0') return;
+        todayExpLocked = true;
+        todayExpLockedValue = parseInt(currentText.replace(/,/g, '')) || 0;
+        todayExpLockedDate = currentDate;
+        btn.classList.add('locked');
+        btn.setAttribute('aria-label', '解鎖目標');
+        btn.setAttribute('title', '解鎖目標');
+        // Update SVG to locked icon
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4"></path>
+        </svg>`;
+        saveTodayExpLock();
+    }
+}
+
+function saveTodayExpLock() {
+    if (todayExpLocked && todayExpLockedValue !== null) {
+        localStorage.setItem('artaleExpLock', JSON.stringify({
+            locked: true,
+            value: todayExpLockedValue,
+            date: todayExpLockedDate
+        }));
+    } else {
+        localStorage.removeItem('artaleExpLock');
+    }
+}
+
+function loadTodayExpLock() {
+    const saved = localStorage.getItem('artaleExpLock');
+    if (!saved) return;
+    try {
+        const data = JSON.parse(saved);
+        // Only restore if locked date is today
+        const today = new Date().toLocaleDateString('zh-TW', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        if (data.locked && data.date === today) {
+            todayExpLocked = true;
+            todayExpLockedValue = data.value;
+            todayExpLockedDate = data.date;
+            const btn = document.getElementById('todayExpLockBtn');
+            btn.classList.add('locked');
+            btn.setAttribute('aria-label', '解鎖目標');
+            btn.setAttribute('title', '解鎖目標');
+            btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4"></path>
+            </svg>`;
+        } else {
+            // Expired lock (different day), clear it
+            localStorage.removeItem('artaleExpLock');
+        }
+    } catch (e) {
+        localStorage.removeItem('artaleExpLock');
+    }
 }
 
 // Initialize event listeners
@@ -1498,6 +1626,9 @@ function initEventListeners() {
         updateScheduleWarning();
         saveToLocalStorage();
     });
+
+    // Today's EXP lock
+    document.getElementById('todayExpLockBtn').addEventListener('click', toggleTodayExpLock);
 
     // Level breakdown modal
     document.getElementById('levelBreakdownBtn').addEventListener('click', showLevelBreakdown);
@@ -1641,6 +1772,7 @@ function init() {
     initEventListeners();
 
     // Load saved data
+    loadTodayExpLock();
     loadFromLocalStorage();
 
     // Load history
