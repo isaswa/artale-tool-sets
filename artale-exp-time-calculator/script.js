@@ -29,8 +29,7 @@ let lastCustomMultiplier = 0;
 // Cache params for per-level date breakdown modal
 let lastLevelBreakdownParams = null;
 let todayExpLocked = false;
-let todayExpLockedValue = null;
-let todayExpLockedDate = null;
+let todayExpLockedData = null; // { level, exp, percentage, dailyExp, date }
 
 // Helper: get daily grinding minutes from HH/MM inputs (capped at 24:00)
 function getDailyGrindingMinutes() {
@@ -122,10 +121,24 @@ function toggleScheduleMode() {
     updateAuraWarning();
 }
 
-// Sync aura due date → auraDays input
-function syncAuraDueDate() {
+// Toggle aura days mode (剩餘天數 vs 到期日)
+function toggleAuraDaysMode() {
+    const mode = document.querySelector('input[name="auraDaysMode"]:checked');
+    const daysDiv = document.getElementById('auraDaysInput');
+    const dueDateDiv = document.getElementById('auraDueDateInput');
+    if (mode && mode.value === 'dueDate') {
+        daysDiv.classList.add('hidden');
+        dueDateDiv.classList.remove('hidden');
+    } else {
+        daysDiv.classList.remove('hidden');
+        dueDateDiv.classList.add('hidden');
+    }
+    updateAuraDueDateInfo();
+}
+
+// Update due date info text
+function updateAuraDueDateInfo() {
     const dueDateInput = document.getElementById('auraDueDate');
-    const auraDaysInput = document.getElementById('auraDays');
     const info = document.getElementById('auraDueDateInfo');
     if (!dueDateInput.value) {
         info.style.display = 'none';
@@ -135,17 +148,29 @@ function syncAuraDueDate() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-    // +1 to include today as an aura day
     const inclusiveDays = diffDays > 0 ? diffDays + 1 : 0;
     if (inclusiveDays > 0) {
-        auraDaysInput.value = inclusiveDays;
         info.textContent = `還剩下 ${inclusiveDays} 天 (含今天)`;
         info.style.display = 'block';
     } else {
-        auraDaysInput.value = 0;
         info.textContent = '已過期';
         info.style.display = 'block';
     }
+}
+
+// Get effective aura days from current mode
+function getEffectiveAuraDays() {
+    const mode = document.querySelector('input[name="auraDaysMode"]:checked');
+    if (mode && mode.value === 'dueDate') {
+        const dueDateInput = document.getElementById('auraDueDate');
+        if (!dueDateInput.value) return -1;
+        const target = new Date(dueDateInput.value + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+        return diffDays > 0 ? diffDays + 1 : 0;
+    }
+    return parseInt(document.getElementById('auraDays').value) || -1;
 }
 
 // Get number of days from today to the selected target date (inclusive of today)
@@ -887,7 +912,7 @@ function calculateResults(e) {
     if (hasAura) {
         const auraType = document.querySelector('input[name="auraType"]:checked').value;
         auraMultiplier = auraType === '2x' ? 100 : 200;
-        auraTotalDays = parseInt(document.getElementById('auraDays').value) || -1;
+        auraTotalDays = getEffectiveAuraDays();
     }
 
     // Determine if schedule is enabled and has valid input
@@ -1167,13 +1192,23 @@ function calculateResults(e) {
 
     // Display today's EXP target
     const todayExpTargetDiv = document.getElementById('todayExpTarget');
-    const todayExpValueEl = document.getElementById('todayExpValue');
+    const todayExpLevelEl = document.getElementById('todayExpLevel');
+    const todayExpAmountEl = document.getElementById('todayExpAmount');
+    const todayExpPercentEl = document.getElementById('todayExpPercent');
     const todayExpDateEl = document.getElementById('todayExpDate');
+    const todayExpProgressEl = document.getElementById('todayExpProgress');
     if (isScheduleEnabled && scheduleMode && !scheduleResultDiv.classList.contains('hidden')) {
-        if (todayExpLocked && todayExpLockedValue !== null) {
+        if (todayExpLocked && todayExpLockedData !== null) {
             // Locked: show cached value and date
-            todayExpValueEl.textContent = formatNumber(todayExpLockedValue);
-            todayExpDateEl.textContent = todayExpLockedDate;
+            todayExpLevelEl.textContent = `Lv.${todayExpLockedData.level}`;
+            todayExpAmountEl.textContent = formatNumber(todayExpLockedData.exp);
+            todayExpPercentEl.textContent = `(${todayExpLockedData.percentage.toFixed(2)}%)`;
+            todayExpDateEl.textContent = todayExpLockedData.date;
+            // Update progress even when locked
+            const todayGained = getTodayExpGained();
+            const dailyTarget = todayExpLockedData.dailyExp;
+            todayExpProgressEl.textContent = `${formatNumber(todayGained)} / ${formatNumber(dailyTarget)}`;
+            todayExpProgressEl.classList.toggle('achieved', todayGained >= dailyTarget);
             todayExpTargetDiv.classList.remove('hidden');
         } else {
             let effectiveDays = 0;
@@ -1187,11 +1222,21 @@ function calculateResults(e) {
             }
             if (effectiveDays > 0) {
                 const dailyExpTarget = Math.ceil(totalExpNeeded / effectiveDays);
-                todayExpValueEl.textContent = formatNumber(dailyExpTarget);
+                // Calculate absolute EXP position after today's target
+                const currentTotalExp = calculateTotalExp(currentLevel, currentExp);
+                const targetTotalExp = currentTotalExp + dailyExpTarget;
+                const targetInfo = totalExpToLevelPercent(targetTotalExp);
+                todayExpLevelEl.textContent = `Lv.${targetInfo.level}`;
+                todayExpAmountEl.textContent = formatNumber(targetInfo.exp);
+                todayExpPercentEl.textContent = `(${targetInfo.percentage.toFixed(2)}%)`;
                 const today = new Date();
                 todayExpDateEl.textContent = today.toLocaleDateString('zh-TW', {
                     year: 'numeric', month: '2-digit', day: '2-digit'
                 });
+                // Today's progress from history
+                const todayGained = getTodayExpGained();
+                todayExpProgressEl.textContent = `${formatNumber(todayGained)} / ${formatNumber(dailyExpTarget)}`;
+                todayExpProgressEl.classList.toggle('achieved', todayGained >= dailyExpTarget);
                 todayExpTargetDiv.classList.remove('hidden');
             } else {
                 todayExpTargetDiv.classList.add('hidden');
@@ -1271,6 +1316,7 @@ function saveToLocalStorage() {
         dailyAura: dailyAuraCheckbox.checked,
         auraType: auraType ? auraType.value : '2x',
         auraDays: document.getElementById('auraDays').value,
+        auraDaysMode: (document.querySelector('input[name="auraDaysMode"]:checked') || {}).value || 'days',
         auraDueDate: document.getElementById('auraDueDate').value
     };
 
@@ -1385,10 +1431,16 @@ function loadFromLocalStorage() {
                 document.getElementById('auraDays').value = formData.auraDays;
             }
 
+            if (formData.auraDaysMode) {
+                const auraDaysModeRadio = document.querySelector(`input[name="auraDaysMode"][value="${formData.auraDaysMode}"]`);
+                if (auraDaysModeRadio) auraDaysModeRadio.checked = true;
+            }
+
             if (formData.auraDueDate) {
                 document.getElementById('auraDueDate').value = formData.auraDueDate;
-                syncAuraDueDate(); // Recompute days from saved due date
             }
+
+            toggleAuraDaysMode();
 
             // Now apply toggles (which depend on loaded values for warning checks)
             if (formData.enableSchedule !== undefined) {
@@ -1457,18 +1509,19 @@ function showLevelBreakdown() {
 // Toggle today's EXP target lock
 function toggleTodayExpLock() {
     const btn = document.getElementById('todayExpLockBtn');
-    const valueEl = document.getElementById('todayExpValue');
+    const levelEl = document.getElementById('todayExpLevel');
+    const amountEl = document.getElementById('todayExpAmount');
+    const percentEl = document.getElementById('todayExpPercent');
     const dateEl = document.getElementById('todayExpDate');
+    const progressEl = document.getElementById('todayExpProgress');
 
     if (todayExpLocked) {
         // Unlock: clear cached value, recalculate
         todayExpLocked = false;
-        todayExpLockedValue = null;
-        todayExpLockedDate = null;
+        todayExpLockedData = null;
         btn.classList.remove('locked');
         btn.setAttribute('aria-label', '鎖定目標');
         btn.setAttribute('title', '鎖定目標');
-        // Update SVG to unlocked icon
         btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v1"></path>
@@ -1478,16 +1531,20 @@ function toggleTodayExpLock() {
         form.dispatchEvent(new Event('submit'));
     } else {
         // Lock: cache current displayed value
-        const currentText = valueEl.textContent;
-        const currentDate = dateEl.textContent;
-        if (!currentText || currentText === '0') return;
+        const levelText = levelEl.textContent;
+        if (!levelText) return;
+        const level = parseInt(levelText.replace('Lv.', '')) || 0;
+        const exp = parseInt(amountEl.textContent.replace(/,/g, '')) || 0;
+        const percentage = parseFloat(percentEl.textContent.replace(/[()%]/g, '')) || 0;
+        const progressParts = progressEl.textContent.split('/');
+        const dailyExp = progressParts.length >= 2 ? parseInt(progressParts[1].trim().replace(/,/g, '')) || 0 : 0;
+        const date = dateEl.textContent;
+
         todayExpLocked = true;
-        todayExpLockedValue = parseInt(currentText.replace(/,/g, '')) || 0;
-        todayExpLockedDate = currentDate;
+        todayExpLockedData = { level, exp, percentage, dailyExp, date };
         btn.classList.add('locked');
         btn.setAttribute('aria-label', '解鎖目標');
         btn.setAttribute('title', '解鎖目標');
-        // Update SVG to locked icon
         btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v4"></path>
@@ -1497,11 +1554,10 @@ function toggleTodayExpLock() {
 }
 
 function saveTodayExpLock() {
-    if (todayExpLocked && todayExpLockedValue !== null) {
+    if (todayExpLocked && todayExpLockedData !== null) {
         localStorage.setItem('artaleExpLock', JSON.stringify({
             locked: true,
-            value: todayExpLockedValue,
-            date: todayExpLockedDate
+            ...todayExpLockedData
         }));
     } else {
         localStorage.removeItem('artaleExpLock');
@@ -1519,8 +1575,13 @@ function loadTodayExpLock() {
         });
         if (data.locked && data.date === today) {
             todayExpLocked = true;
-            todayExpLockedValue = data.value;
-            todayExpLockedDate = data.date;
+            todayExpLockedData = {
+                level: data.level,
+                exp: data.exp,
+                percentage: data.percentage,
+                dailyExp: data.dailyExp,
+                date: data.date
+            };
             const btn = document.getElementById('todayExpLockBtn');
             btn.classList.add('locked');
             btn.setAttribute('aria-label', '解鎖目標');
@@ -1650,15 +1711,16 @@ function initEventListeners() {
     document.querySelectorAll('input[name="auraType"]').forEach(radio => {
         radio.addEventListener('change', saveToLocalStorage);
     });
-    document.getElementById('auraDays').addEventListener('input', () => {
-        // Manual edit clears due date
-        document.getElementById('auraDueDate').value = '';
-        document.getElementById('auraDueDateInfo').style.display = 'none';
+    document.getElementById('auraDays').addEventListener('input', saveToLocalStorage);
+    document.getElementById('auraDueDate').addEventListener('change', () => {
+        updateAuraDueDateInfo();
         saveToLocalStorage();
     });
-    document.getElementById('auraDueDate').addEventListener('change', () => {
-        syncAuraDueDate();
-        saveToLocalStorage();
+    document.querySelectorAll('input[name="auraDaysMode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            toggleAuraDaysMode();
+            saveToLocalStorage();
+        });
     });
 
     // Save to localStorage when basic inputs change
@@ -1729,6 +1791,7 @@ function initEventListeners() {
     document.querySelectorAll('input[name="auraType"]').forEach(r => r.addEventListener('change', autoCalc));
     document.getElementById('auraDays').addEventListener('input', autoCalc);
     document.getElementById('auraDueDate').addEventListener('change', autoCalc);
+    document.querySelectorAll('input[name="auraDaysMode"]').forEach(r => r.addEventListener('change', autoCalc));
 }
 
 // Initialize DOM elements
@@ -2334,7 +2397,49 @@ function totalExpToLevelPercent(totalExp) {
     const expForCurrentLevel = expData[level] ? expData[level].exp : 1;
     const percentage = (remainingExp / expForCurrentLevel) * 100;
 
-    return { level, percentage };
+    return { level, exp: remainingExp, percentage };
+}
+
+// Get today's EXP gained from history records
+function getTodayExpGained() {
+    if (levelHistory.length === 0) return 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.getTime();
+    const yesterdayStart = todayStart - 86400000;
+
+    // Find the last record from today and the last record before today
+    let lastTodayRecord = null;
+    let lastBeforeTodayRecord = null;
+
+    for (let i = levelHistory.length - 1; i >= 0; i--) {
+        const record = levelHistory[i];
+        if (record.timestamp >= todayStart) {
+            if (!lastTodayRecord) lastTodayRecord = record;
+        } else {
+            if (!lastBeforeTodayRecord) lastBeforeTodayRecord = record;
+            break;
+        }
+    }
+
+    if (!lastTodayRecord) return 0;
+    if (!lastBeforeTodayRecord) {
+        // No record before today — find earliest today record as baseline
+        let earliestToday = null;
+        for (let i = 0; i < levelHistory.length; i++) {
+            if (levelHistory[i].timestamp >= todayStart) {
+                earliestToday = levelHistory[i];
+                break;
+            }
+        }
+        if (earliestToday && lastTodayRecord !== earliestToday) {
+            return lastTodayRecord.totalExp - earliestToday.totalExp;
+        }
+        return 0;
+    }
+
+    return lastTodayRecord.totalExp - lastBeforeTodayRecord.totalExp;
 }
 
 // Render history chart

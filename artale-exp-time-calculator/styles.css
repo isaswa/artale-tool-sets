@@ -1177,6 +1177,13 @@ body {
     border-bottom: none;
 }
 
+.schedule-result .result-item,
+.schedule-result .today-exp-row {
+    display: grid;
+    grid-template-columns: 40% 1fr 28px;
+    align-items: center;
+}
+
 .today-exp-target {
     margin-top: 8px;
     padding-top: 8px;
@@ -1187,18 +1194,18 @@ body {
     display: none;
 }
 
-.today-exp-row {
+.today-exp-row .result-label-group {
     display: flex;
-    align-items: center;
+    flex-direction: column;
 }
 
-.today-exp-row .result-label {
-    min-width: 40%;
-    flex-shrink: 0;
+.today-exp-value {
+    white-space: nowrap;
+    font-size: 15px;
 }
 
-.today-exp-row .result-value {
-    flex: 1;
+.today-exp-progress-row {
+    grid-template-columns: 40% 1fr !important;
 }
 
 .today-exp-lock-btn {
@@ -1222,13 +1229,50 @@ body {
     background-color: #e53935;
 }
 
+.today-exp-level {
+    color: #fdd835;
+    margin-right: 6px;
+}
+
+.today-exp-amount {
+    color: #4caf50;
+}
+
+.today-exp-percent {
+    color: #90caf9;
+    margin-left: 6px;
+    font-size: 13px;
+}
+
 .today-exp-date {
-    display: block;
     font-size: 12px;
     color: var(--text-color);
     opacity: 0.6;
+    margin-top: 2px;
+}
+
+.today-exp-progress-row {
     margin-top: 4px;
-    padding-left: 40%;
+}
+
+.today-exp-progress {
+    color: #fdd835;
+}
+
+.today-exp-progress.achieved {
+    color: #4caf50;
+}
+
+.light-theme .today-exp-level {
+    color: #e65100;
+}
+
+.light-theme .today-exp-percent {
+    color: #1565c0;
+}
+
+.light-theme .today-exp-progress {
+    color: #e65100;
 }
 
 /* Date input */
@@ -1270,6 +1314,10 @@ body:not(.light-theme) .date-input {
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+.aura-days-option.hidden {
+    display: none;
 }
 
 /* Level breakdown button (magnifying glass) */
@@ -1915,8 +1963,18 @@ body:not(.light-theme) .date-input {
         padding: 5px 10px;
     }
 
-    .today-exp-date {
-        padding-left: 0;
+    .schedule-result .result-item,
+    .schedule-result .today-exp-row {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .today-exp-value {
+        white-space: normal;
+    }
+
+    .today-exp-progress-row {
+        grid-template-columns: unset !important;
     }
 
 }

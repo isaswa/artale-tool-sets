@@ -309,16 +309,30 @@
                                         </label>
                                     </div>
                                     <div class="aura-days-group">
-                                        <label class="input-label">
-                                            剩餘天數:
-                                            <input type="number" id="auraDays" value="-1" class="small-input">
-                                            (天, -1 = 無限制)
-                                        </label>
-                                        <label class="input-label">
-                                            或 到期日:
-                                            <input type="date" id="auraDueDate" class="date-input">
-                                        </label>
-                                        <span id="auraDueDateInfo" class="schedule-info" style="display:none;"></span>
+                                        <div class="radio-group-inline">
+                                            <label>
+                                                <input type="radio" name="auraDaysMode" value="days" checked>
+                                                剩餘天數
+                                            </label>
+                                            <label>
+                                                <input type="radio" name="auraDaysMode" value="dueDate">
+                                                到期日
+                                            </label>
+                                        </div>
+                                        <div id="auraDaysInput" class="aura-days-option">
+                                            <label class="input-label">
+                                                天數:
+                                                <input type="number" id="auraDays" value="-1" class="small-input">
+                                                (-1 = 無限制)
+                                            </label>
+                                        </div>
+                                        <div id="auraDueDateInput" class="aura-days-option hidden">
+                                            <label class="input-label">
+                                                到期日:
+                                                <input type="date" id="auraDueDate" class="date-input">
+                                            </label>
+                                            <span id="auraDueDateInfo" class="schedule-info" style="display:none;"></span>
+                                        </div>
                                     </div>
                                     <span id="auraWarning" class="schedule-warning" style="display:none;">如果每日練功時間低於1小時，氣場的計算可能會有較大誤差</span>
                                 </div>
@@ -341,8 +355,15 @@
                 </div>
                 <div id="todayExpTarget" class="today-exp-target hidden">
                     <div class="today-exp-row">
-                        <span class="result-label">今日目標 EXP :</span>
-                        <span id="todayExpValue" class="result-value">0</span>
+                        <span class="result-label-group">
+                            <span class="result-label">今日目標 EXP :</span>
+                            <span id="todayExpDate" class="today-exp-date"></span>
+                        </span>
+                        <span id="todayExpValue" class="result-value today-exp-value">
+                            <span id="todayExpLevel" class="today-exp-level"></span>
+                            <span id="todayExpAmount" class="today-exp-amount"></span>
+                            <span id="todayExpPercent" class="today-exp-percent"></span>
+                        </span>
                         <button id="todayExpLockBtn" class="today-exp-lock-btn" aria-label="鎖定目標" title="鎖定目標">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -350,7 +371,10 @@
                             </svg>
                         </button>
                     </div>
-                    <span id="todayExpDate" class="today-exp-date"></span>
+                    <div class="today-exp-row today-exp-progress-row">
+                        <span class="result-label">今日已達成 EXP :</span>
+                        <span id="todayExpProgress" class="result-value today-exp-progress">0 / 0</span>
+                    </div>
                 </div>
             </div>
 
