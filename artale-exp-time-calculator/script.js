@@ -1986,6 +1986,9 @@ function recordLevelExp() {
     if (historyPanel && !historyPanel.classList.contains('hidden')) {
         renderHistoryChart();
     }
+
+    // Trigger recalculation to update today's progress display
+    form.dispatchEvent(new Event('submit'));
 }
 
 // Update record count display
