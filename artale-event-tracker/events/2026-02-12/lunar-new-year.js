@@ -3,8 +3,7 @@
  * Event period: 2026/02/12 (inclusive) - 2026/03/26 (exclusive, Thursday reset)
  * Last playable day: 2026/03/25
  */
-const EVENTS = [
-  {
+(window.EVENTS = window.EVENTS || []).push({
     id: 'lunar-new-year-2026',
     name: '春節紅包活動',
     startDate: '2026-02-12',
@@ -55,5 +54,4 @@ const EVENTS = [
       { id: 'choco_suit', name: '甜蜜巧克力西裝', cost: 20, maxQty: 1, note: '無法交易' },
       { id: 'choco_shoes', name: '甜蜜巧克力皮鞋', cost: 20, maxQty: 1, note: '無法交易' }
     ]
-  }
-];
+});

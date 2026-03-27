@@ -20,6 +20,9 @@
   function getPathPrefix() {
     var tool = document.body.dataset.tool;
     if (tool === 'home') return './';
+    // Support deeper nesting (e.g. event sub-pages)
+    var prefix = document.body.dataset.pathPrefix;
+    if (prefix) return prefix;
     return '../';
   }
 

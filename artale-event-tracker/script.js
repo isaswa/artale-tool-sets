@@ -4,6 +4,7 @@
   const STORAGE_PREFIX = 'artale_event_';
   let timerInterval = null;
   let currentEventId = null;
+  const PAGE_EVENT_ID = (typeof CURRENT_EVENT_ID !== 'undefined') ? CURRENT_EVENT_ID : null;
 
   // ===== Date/Time Utilities =====
 
@@ -161,8 +162,23 @@
 
   function getSelectedEvent() {
     const saved = localStorage.getItem('artale_selected_event');
-    const sorted = [...EVENTS].sort((a, b) => b.startDate.localeCompare(a.startDate));
+    const events = (typeof EVENTS !== 'undefined') ? EVENTS : [];
+    const sorted = [...events].sort((a, b) => b.startDate.localeCompare(a.startDate));
     return sorted.find(e => e.id === saved) || sorted[0];
+  }
+
+  function getEventUrl(eventId) {
+    if (PAGE_EVENT_ID) {
+      return '../' + eventId + '/';
+    }
+    return './' + eventId + '/';
+  }
+
+  function getHubUrl() {
+    if (PAGE_EVENT_ID) {
+      return '../';
+    }
+    return './';
   }
 
   // ===== History Helpers =====
@@ -396,188 +412,257 @@
 
   function renderApp() {
     const app = document.getElementById('app');
-    if (!app || typeof EVENTS === 'undefined' || EVENTS.length === 0) return;
+    if (!app) return;
+    const events = (typeof EVENTS !== 'undefined') ? EVENTS : [];
 
-    const selected = getSelectedEvent();
-    currentEventId = selected.id;
-    const state = loadState(selected.id);
+    let html = '';
 
-    if (migrateStateToHistory(selected, state)) {
-      saveState(selected.id, state);
+    if (PAGE_EVENT_ID) {
+      // Event sub-page mode
+      const event = events.find(e => e.id === PAGE_EVENT_ID);
+      if (!event) {
+        html = '<p>找不到此活動</p>';
+        app.innerHTML = html;
+        return;
+      }
+
+      currentEventId = event.id;
+      const state = loadState(event.id);
+      if (migrateStateToHistory(event, state)) {
+        saveState(event.id, state);
+      }
+
+      const isEnded = getEventStatus(event) === 'ended';
+
+      html += renderEventDropdown(events, event.id);
+      html += renderEventContent(event, state, isEnded);
+      app.innerHTML = html;
+
+      bindDropdown(events);
+      bindEventHandlers(event, state, isEnded);
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(function () { updateEventTimers(event); }, 1000);
+      updateEventTimers(event);
+    } else {
+      // Hub page mode
+      html += renderEventDropdown(events, null);
+      html += renderHubContent();
+      app.innerHTML = html;
+
+      bindDropdown(events);
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(updateHubTimers, 1000);
+      updateHubTimers();
     }
-
-    let html = renderEventSelector(selected.id);
-    html += renderEventContent(selected, state);
-    app.innerHTML = html;
-
-    bindEventSelector();
-    bindEventHandlers(selected, state);
-
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(updateTimers, 1000);
-    updateTimers();
   }
 
-  function renderEventSelector(selectedId) {
-    const sorted = [...EVENTS].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  function getActiveEvent(events) {
+    const sorted = [...events].sort(function (a, b) { return b.startDate.localeCompare(a.startDate); });
+    return sorted.find(function (e) {
+      const s = getEventStatus(e);
+      return s === 'active' || s === 'upcoming';
+    }) || null;
+  }
 
-    let tabsHtml = '';
+  function renderEventDropdown(events, selectedId) {
+    const sorted = [...events].sort(function (a, b) { return b.startDate.localeCompare(a.startDate); });
+    const activeEvent = getActiveEvent(events);
+    const isOnHub = !selectedId;
+    const isOnActiveEvent = selectedId && activeEvent && selectedId === activeEvent.id;
+
+    const statusLabels = { active: '進行中', upcoming: '即將開始', ended: '已結束' };
+
+    // First option: "目前進行中活動" - always present
+    let currentLabel = '目前進行中活動';
+    if (!activeEvent) {
+      currentLabel += ' (目前沒有活動)';
+    } else {
+      currentLabel += '：' + activeEvent.name;
+    }
+    const currentSelected = (isOnHub || isOnActiveEvent) ? ' selected' : '';
+    let options = '<option value="__current__"' + currentSelected + '>' + currentLabel + '</option>';
+
+    // Other events (skip the active one since it's covered by the top option)
     for (const event of sorted) {
-      const isActive = event.id === selectedId;
+      if (activeEvent && event.id === activeEvent.id) continue;
       const status = getEventStatus(event);
-      const statusText = { active: '進行中', upcoming: '即將開始', ended: '已結束' }[status];
-      tabsHtml += `
-        <button class="event-tab ${isActive ? 'active' : ''}" data-event-id="${event.id}">
-          <span class="event-tab-name">${event.name}</span>
-          <span class="event-tab-badge ${status}">${statusText}</span>
-        </button>
-      `;
+      const label = event.name + ' (' + statusLabels[status] + ')';
+      const isSelected = event.id === selectedId;
+      options += '<option value="' + event.id + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
     }
 
-    const selected = sorted.find(e => e.id === selectedId);
-    const dateInfo = `${selected.startDate.replace(/-/g, '/')} ~ ${selected.endDate.replace(/-/g, '/')} (結束日不含)`;
+    let dateInfo = '';
+    if (selectedId) {
+      const selected = sorted.find(function (e) { return e.id === selectedId; });
+      if (selected) {
+        dateInfo = '<div class="event-dates">' + selected.startDate.replace(/-/g, '/') + ' ~ ' + selected.endDate.replace(/-/g, '/') + ' (結束日不含)</div>';
+      }
+    }
 
-    return `
-      <div class="event-selector-wrapper">
-        <div class="event-selector">${tabsHtml}</div>
-        <div class="event-dates" id="eventDates">${dateInfo}</div>
-      </div>
-    `;
+    return '' +
+      '<div class="event-selector-wrapper">' +
+        '<div class="event-selector">' +
+          '<select class="event-dropdown" id="eventDropdown">' + options + '</select>' +
+        '</div>' +
+        dateInfo +
+      '</div>';
   }
 
-  function renderEventContent(event, state) {
+  function renderHubContent() {
+    return '' +
+      '<div class="time-info">' +
+        '<div class="current-time" id="currentTime-hub">目前時間：' + formatLocalTime(new Date()) + '</div>' +
+        '<div class="reset-timers">' +
+          '<div class="reset-item">' +
+            '<span class="reset-label">每日重置</span>' +
+            '<span class="reset-countdown" id="dailyReset-hub">--:--:--</span>' +
+          '</div>' +
+          '<div class="reset-item">' +
+            '<span class="reset-label">每週重置 (四)</span>' +
+            '<span class="reset-countdown" id="weeklyReset-hub">--:--:--</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="section">' +
+        '<div class="section-header">' +
+          '<h3>任務列表</h3>' +
+        '</div>' +
+        '<div class="section-body">' +
+          '<div class="empty-tasks">目前沒有進行中的任務</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderEventContent(event, state, isEnded) {
     const totals = calculateTotals(event, state);
 
-    return `
-      <div class="event event-columns" data-event-id="${event.id}">
-        <div class="event-col-left">
-          ${renderTimeInfo(event)}
-          ${renderSummary(event, state, totals)}
-          ${renderCheckin(event, state)}
-          ${renderShop(event, state)}
-          ${renderResetButton(event)}
-        </div>
-        <div class="event-col-right">
-          ${renderTasks(event, state)}
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="event event-columns' + (isEnded ? ' event-ended' : '') + '" data-event-id="' + event.id + '">' +
+        '<div class="event-col-left">' +
+          renderTimeInfo(event) +
+          renderSummary(event, state, totals) +
+          renderCheckin(event, state, isEnded) +
+          renderShop(event, state, isEnded) +
+          renderResetButton(event) +
+        '</div>' +
+        '<div class="event-col-right">' +
+          renderTasks(event, state, isEnded) +
+        '</div>' +
+      '</div>';
   }
 
   function renderTimeInfo(event) {
-    return `
-      <div class="time-info">
-        <div class="current-time" id="currentTime-${event.id}">
-          目前時間：${formatLocalTime(new Date())}
-        </div>
-        <div class="reset-timers">
-          <div class="reset-item">
-            <span class="reset-label">每日重置</span>
-            <span class="reset-countdown" id="dailyReset-${event.id}">--:--:--</span>
-          </div>
-          <div class="reset-item">
-            <span class="reset-label">每週重置 (四)</span>
-            <span class="reset-countdown" id="weeklyReset-${event.id}">--:--:--</span>
-          </div>
-          <div class="reset-item">
-            <span class="reset-label">雙週重置</span>
-            <span class="reset-countdown" id="biweeklyReset-${event.id}">--:--:--</span>
-          </div>
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="time-info">' +
+        '<div class="current-time" id="currentTime-' + event.id + '">目前時間：' + formatLocalTime(new Date()) + '</div>' +
+        '<div class="reset-timers">' +
+          '<div class="reset-item">' +
+            '<span class="reset-label">每日重置</span>' +
+            '<span class="reset-countdown" id="dailyReset-' + event.id + '">--:--:--</span>' +
+          '</div>' +
+          '<div class="reset-item">' +
+            '<span class="reset-label">每週重置 (四)</span>' +
+            '<span class="reset-countdown" id="weeklyReset-' + event.id + '">--:--:--</span>' +
+          '</div>' +
+          '<div class="reset-item">' +
+            '<span class="reset-label">雙週重置</span>' +
+            '<span class="reset-countdown" id="biweeklyReset-' + event.id + '">--:--:--</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   }
 
   function renderSummary(event, state, totals) {
     const maxEarnable = calculateMaxEarnable(event);
     const remaining = maxEarnable - totals.earned;
-    const totalShopCost = event.shop.reduce((sum, item) => sum + item.cost * item.maxQty, 0);
-    return `
-      <div class="summary">
-        <div class="summary-card earned" data-filter="earn" data-event="${event.id}">
-          <span class="summary-value" id="totalEarned-${event.id}">${totals.earned}</span>
-          <span class="summary-label">已獲得 ${event.currency}</span>
-          <span class="summary-subtitle" id="earnedSubtitle-${event.id}">活動結束前還可以獲得: ${remaining} 個${event.currency}</span>
-        </div>
-        <div class="summary-card spent" data-filter="spend" data-event="${event.id}">
-          <span class="summary-value" id="totalSpent-${event.id}">${totals.spent}</span>
-          <span class="summary-label">已使用 ${event.currency}</span>
-          <span class="summary-subtitle">買完商店道具需要: ${totalShopCost} 個${event.currency}</span>
-        </div>
-        <div class="summary-card balance">
-          <span class="summary-value" id="balance-${event.id}">${totals.balance}</span>
-          <span class="summary-label">目前持有 ${event.currency}</span>
-        </div>
-      </div>
-    `;
+    const totalShopCost = event.shop.reduce(function (sum, item) { return sum + item.cost * item.maxQty; }, 0);
+    return '' +
+      '<div class="summary">' +
+        '<div class="summary-card earned" data-filter="earn" data-event="' + event.id + '">' +
+          '<span class="summary-value" id="totalEarned-' + event.id + '">' + totals.earned + '</span>' +
+          '<span class="summary-label">已獲得 ' + event.currency + '</span>' +
+          '<span class="summary-subtitle" id="earnedSubtitle-' + event.id + '">活動結束前還可以獲得: ' + remaining + ' 個' + event.currency + '</span>' +
+        '</div>' +
+        '<div class="summary-card spent" data-filter="spend" data-event="' + event.id + '">' +
+          '<span class="summary-value" id="totalSpent-' + event.id + '">' + totals.spent + '</span>' +
+          '<span class="summary-label">已使用 ' + event.currency + '</span>' +
+          '<span class="summary-subtitle">買完商店道具需要: ' + totalShopCost + ' 個' + event.currency + '</span>' +
+        '</div>' +
+        '<div class="summary-card balance">' +
+          '<span class="summary-value" id="balance-' + event.id + '">' + totals.balance + '</span>' +
+          '<span class="summary-label">目前持有 ' + event.currency + '</span>' +
+        '</div>' +
+      '</div>';
   }
 
-  function renderCheckin(event, state) {
+  function renderCheckin(event, state, isEnded) {
     const count = state.checkin.count;
     const maxDays = event.checkin.maxDays;
     const todayKey = getUTCDateKey(new Date());
     const checkedInToday = state.checkin.lastDate === todayKey;
     const pct = Math.min((count / maxDays) * 100, 100);
+    const dis = isEnded ? ' disabled' : '';
 
     let milestonesHtml = '';
     let markersHtml = '';
     for (const m of event.checkin.milestones) {
       const reached = count >= m.day;
       const pos = (m.day / maxDays) * 100;
-      milestonesHtml += `
-        <div class="milestone-item ${reached ? 'reached' : ''}">
-          <span class="milestone-check">${reached ? '&#10003;' : '&#9675;'}</span>
-          <span>第${m.day}天：+${m.reward} ${event.currency}</span>
-        </div>
-      `;
-      markersHtml += `<div class="milestone-marker ${reached ? 'reached' : ''}" style="left: ${pos}%" title="第${m.day}天"></div>`;
+      milestonesHtml += '' +
+        '<div class="milestone-item ' + (reached ? 'reached' : '') + '">' +
+          '<span class="milestone-check">' + (reached ? '&#10003;' : '&#9675;') + '</span>' +
+          '<span>第' + m.day + '天：+' + m.reward + ' ' + event.currency + '</span>' +
+        '</div>';
+      markersHtml += '<div class="milestone-marker ' + (reached ? 'reached' : '') + '" style="left: ' + pos + '%" title="第' + m.day + '天"></div>';
     }
 
     let btnHtml;
-    if (checkedInToday) {
-      btnHtml = `
-        <span style="color: var(--success); font-weight: 600;">&#10003; 今日已簽到</span>
-        <button class="btn-checkin-undo" id="checkinUndo-${event.id}">取消</button>
-      `;
+    if (isEnded) {
+      btnHtml = '<span style="color: var(--text-secondary); font-weight: 600;">活動已結束</span>';
+    } else if (checkedInToday) {
+      btnHtml = '' +
+        '<span style="color: var(--success); font-weight: 600;">&#10003; 今日已簽到</span>' +
+        '<button class="btn-checkin-undo" id="checkinUndo-' + event.id + '">取消</button>';
     } else if (count >= maxDays) {
-      btnHtml = `<span style="color: var(--success); font-weight: 600;">&#10003; 簽到完成</span>`;
+      btnHtml = '<span style="color: var(--success); font-weight: 600;">&#10003; 簽到完成</span>';
     } else {
-      btnHtml = `<button class="btn-checkin" id="checkinBtn-${event.id}">今日簽到</button>`;
+      btnHtml = '<button class="btn-checkin" id="checkinBtn-' + event.id + '"' + dis + '>今日簽到</button>';
     }
 
-    const checkinCollapsed = isSectionCollapsed(`checkin-${event.id}`);
-    const doneLabel = checkedInToday
+    const checkinCollapsed = isSectionCollapsed('checkin-' + event.id);
+    const doneLabel = (!isEnded && checkedInToday)
       ? '<span class="section-done-label">本日已完成</span>'
       : '';
 
-    return `
-      <div class="section" id="checkinSection-${event.id}">
-        <div class="section-header${checkedInToday ? ' section-header-done' : ''}" data-section="checkin-${event.id}">
-          <h3>每日簽到</h3>
-          ${doneLabel}
-          <span class="toggle-icon${checkinCollapsed ? ' collapsed' : ''}" id="toggleIcon-checkin-${event.id}">&#9660;</span>
-        </div>
-        <div class="section-body${checkinCollapsed ? ' collapsed' : ''}" id="sectionBody-checkin-${event.id}">
-          <div class="checkin-status" id="checkinStatus-${event.id}">
-            <div class="checkin-text-group">
-              <span class="checkin-text">已簽到 <strong>${count}</strong> / ${maxDays} 天</span>
-              <button class="btn-edit-past btn-edit-past-checkin" id="editCheckin-${event.id}" title="編輯簽到紀錄">${PENCIL_SVG}</button>
-            </div>
-            <div>${btnHtml}</div>
-          </div>
-          <div class="checkin-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: ${pct}%"></div>
-              <div class="milestone-markers">${markersHtml}</div>
-            </div>
-          </div>
-          <div class="milestone-list">${milestonesHtml}</div>
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="section" id="checkinSection-' + event.id + '">' +
+        '<div class="section-header' + (!isEnded && checkedInToday ? ' section-header-done' : '') + '" data-section="checkin-' + event.id + '">' +
+          '<h3>每日簽到</h3>' +
+          doneLabel +
+          '<span class="toggle-icon' + (checkinCollapsed ? ' collapsed' : '') + '" id="toggleIcon-checkin-' + event.id + '">&#9660;</span>' +
+        '</div>' +
+        '<div class="section-body' + (checkinCollapsed ? ' collapsed' : '') + '" id="sectionBody-checkin-' + event.id + '">' +
+          '<div class="checkin-status" id="checkinStatus-' + event.id + '">' +
+            '<div class="checkin-text-group">' +
+              '<span class="checkin-text">已簽到 <strong>' + count + '</strong> / ' + maxDays + ' 天</span>' +
+              '<button class="btn-edit-past btn-edit-past-checkin" id="editCheckin-' + event.id + '" title="編輯簽到紀錄"' + dis + '>' + PENCIL_SVG + '</button>' +
+            '</div>' +
+            '<div>' + btnHtml + '</div>' +
+          '</div>' +
+          '<div class="checkin-progress">' +
+            '<div class="progress-bar">' +
+              '<div class="progress-fill" style="width: ' + pct + '%"></div>' +
+              '<div class="milestone-markers">' + markersHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="milestone-list">' + milestonesHtml + '</div>' +
+        '</div>' +
+      '</div>';
   }
 
-  function renderTasks(event, state) {
+  function renderTasks(event, state, isEnded) {
     const typeLabels = {
       daily: '每日任務',
       weekly: '每週任務',
@@ -593,52 +678,49 @@
       let tasksHtml = '';
       for (const task of tasks) {
         if (task.claims) {
-          // Multi-claim task: +/- UI
-          tasksHtml += renderMultiClaimTask(event, state, task, type);
+          tasksHtml += renderMultiClaimTask(event, state, task, type, isEnded);
         } else {
-          // Single checkbox task
-          tasksHtml += renderCheckboxTask(event, state, task, type);
+          tasksHtml += renderCheckboxTask(event, state, task, type, isEnded);
         }
       }
 
-      const countdownId = type !== 'onetime' ? `taskGroupReset-${event.id}-${type}` : null;
+      const countdownId = type !== 'onetime' ? 'taskGroupReset-' + event.id + '-' + type : null;
       const countdownHtml = countdownId
-        ? `<span class="task-group-countdown" id="${countdownId}"></span>`
+        ? '<span class="task-group-countdown" id="' + countdownId + '"></span>'
         : '';
 
-      groupsHtml += `
-        <div class="task-group">
-          <div class="task-group-header">
-            <span>${typeLabels[type]}</span>
-            <div class="task-group-header-right">
-              ${countdownHtml}
-              <span class="task-group-npc-label">任務NPC</span>
-              <span class="task-group-edit-label">補登</span>
-            </div>
-          </div>
-          ${tasksHtml}
-        </div>
-      `;
+      groupsHtml += '' +
+        '<div class="task-group">' +
+          '<div class="task-group-header">' +
+            '<span>' + typeLabels[type] + '</span>' +
+            '<div class="task-group-header-right">' +
+              countdownHtml +
+              '<span class="task-group-npc-label">任務NPC</span>' +
+              '<span class="task-group-edit-label">補登</span>' +
+            '</div>' +
+          '</div>' +
+          tasksHtml +
+        '</div>';
     }
 
-    const tasksCollapsed = isSectionCollapsed(`tasks-${event.id}`);
+    const tasksCollapsed = isSectionCollapsed('tasks-' + event.id);
 
-    return `
-      <div class="section" id="tasksSection-${event.id}">
-        <div class="section-header" data-section="tasks-${event.id}">
-          <h3>任務列表</h3>
-          <span class="toggle-icon${tasksCollapsed ? ' collapsed' : ''}" id="toggleIcon-tasks-${event.id}">&#9660;</span>
-        </div>
-        <div class="section-body${tasksCollapsed ? ' collapsed' : ''}" id="sectionBody-tasks-${event.id}">
-          ${groupsHtml}
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="section" id="tasksSection-' + event.id + '">' +
+        '<div class="section-header" data-section="tasks-' + event.id + '">' +
+          '<h3>任務列表</h3>' +
+          '<span class="toggle-icon' + (tasksCollapsed ? ' collapsed' : '') + '" id="toggleIcon-tasks-' + event.id + '">&#9660;</span>' +
+        '</div>' +
+        '<div class="section-body' + (tasksCollapsed ? ' collapsed' : '') + '" id="sectionBody-tasks-' + event.id + '">' +
+          groupsHtml +
+        '</div>' +
+      '</div>';
   }
 
-  function renderCheckboxTask(event, state, task, type) {
+  function renderCheckboxTask(event, state, task, type, isEnded) {
     const completed = isTaskCompleted(task.id, type, state, event.startDate);
     const taskState = state.tasks[task.id];
+    const dis = isEnded ? ' disabled' : '';
 
     let rewardHtml;
     let cardSelectHtml = '';
@@ -648,88 +730,87 @@
     if (task.cardSelect) {
       const selectedCard = (taskState && taskState.selectedCard) || task.cardSelect[0].card;
       const reward = getCardReward(task, selectedCard, event.startDate);
-      const selectedOption = task.cardSelect.find(c => c.card === selectedCard);
+      const selectedOption = task.cardSelect.find(function (c) { return c.card === selectedCard; });
 
       let options = '';
       for (const opt of task.cardSelect) {
-        options += `<option value="${opt.card}" ${selectedCard === opt.card ? 'selected' : ''}>${opt.label}</option>`;
+        options += '<option value="' + opt.card + '" ' + (selectedCard === opt.card ? 'selected' : '') + '>' + opt.label + '</option>';
       }
-      cardSelectHtml = `<select class="card-select" data-event="${event.id}" data-task="${task.id}" data-type="${type}">${options}</select>`;
+      cardSelectHtml = '<select class="card-select" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '"' + dis + '>' + options + '</select>';
 
       if (reward > 0) {
-        rewardHtml = `<span class="task-reward">+${reward} ${event.currency}</span>`;
+        rewardHtml = '<span class="task-reward">+' + reward + ' ' + event.currency + '</span>';
       } else if (selectedOption && selectedOption.altRewardLabel) {
-        rewardHtml = `<span class="task-reward task-reward-alt">${selectedOption.altRewardLabel}</span>`;
+        rewardHtml = '<span class="task-reward task-reward-alt">' + selectedOption.altRewardLabel + '</span>';
       } else {
-        rewardHtml = `<span class="task-reward">+0 ${event.currency}</span>`;
+        rewardHtml = '<span class="task-reward">+0 ' + event.currency + '</span>';
       }
 
-      const card5 = task.cardSelect.find(c => c.bonusWeeks);
+      const card5 = task.cardSelect.find(function (c) { return c.bonusWeeks; });
       if (card5) {
         extraClass = ' has-card-info';
         const weekNum = getEventWeekNumber(event.startDate);
         const isBonusWeek = card5.bonusWeeks.includes(weekNum);
         const bonusWeeksLabel = card5.bonusWeeks.join('/');
-        const allWeeks = Array.from({ length: 6 }, (_, i) => i + 1);
-        const nonBonusWeeks = allWeeks.filter(w => !card5.bonusWeeks.includes(w));
+        const allWeeks = Array.from({ length: 6 }, function (_, i) { return i + 1; });
+        const nonBonusWeeks = allWeeks.filter(function (w) { return !card5.bonusWeeks.includes(w); });
 
-        cardInfoHtml = `
-          <div class="card-info${isBonusWeek ? ' bonus-week' : ''}">
-            <span>${card5.label}：第${bonusWeeksLabel}週 +${card5.reward}${event.currency} ｜ 第${nonBonusWeeks.join('/')}週 ${card5.altRewardLabel}</span>
-            <span class="card-info-week">目前第${weekNum}週</span>
-          </div>
-        `;
+        cardInfoHtml = '' +
+          '<div class="card-info' + (isBonusWeek ? ' bonus-week' : '') + '">' +
+            '<span>' + card5.label + '：第' + bonusWeeksLabel + '週 +' + card5.reward + event.currency + ' ｜ 第' + nonBonusWeeks.join('/') + '週 ' + card5.altRewardLabel + '</span>' +
+            '<span class="card-info-week">目前第' + weekNum + '週</span>' +
+          '</div>';
       }
     } else if (task.variable && completed) {
       const currentReward = (taskState && taskState.currentReward) || task.reward;
       let options = '';
       for (let i = task.minReward; i <= task.reward; i++) {
-        options += `<option value="${i}" ${currentReward === i ? 'selected' : ''}>${i}</option>`;
+        options += '<option value="' + i + '" ' + (currentReward === i ? 'selected' : '') + '>' + i + '</option>';
       }
-      rewardHtml = `
-        <span class="task-reward">+</span>
-        <select class="task-reward-select" data-event="${event.id}" data-task="${task.id}" data-type="${type}">${options}</select>
-        <span class="task-reward">${event.currency}</span>
-      `;
+      rewardHtml = '' +
+        '<span class="task-reward">+</span>' +
+        '<select class="task-reward-select" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '"' + dis + '>' + options + '</select>' +
+        '<span class="task-reward">' + event.currency + '</span>';
     } else if (task.variable) {
-      rewardHtml = `<span class="task-reward">+${task.minReward}~${task.reward} ${event.currency}</span>`;
+      rewardHtml = '<span class="task-reward">+' + task.minReward + '~' + task.reward + ' ' + event.currency + '</span>';
     } else {
-      rewardHtml = `<span class="task-reward">+${task.reward} ${event.currency}</span>`;
+      rewardHtml = '<span class="task-reward">+' + task.reward + ' ' + event.currency + '</span>';
     }
 
-    return `
-      <div class="task-row">
-        <div class="task-row-content">
-          <div class="task-item${extraClass} ${completed ? 'completed' : ''}" id="taskItem-${event.id}-${task.id}">
-            <input type="checkbox" class="task-checkbox"
-              id="task-${event.id}-${task.id}"
-              data-event="${event.id}"
-              data-task="${task.id}"
-              data-type="${type}"
-              ${task.cardSelect ? 'data-card-select="true"' : `data-reward="${task.reward}" data-min-reward="${task.minReward || task.reward}" data-variable="${!!task.variable}"`}
-              ${completed ? 'checked' : ''}>
-            <div class="task-info">
-              <span class="task-name">${task.name}</span>
-              <span class="task-note">${task.note || ''}</span>
-            </div>
-            ${cardSelectHtml}
-            ${rewardHtml}
-            ${task.npc ? `<span class="task-npc">${task.npc}</span>` : ''}
-          </div>
-          ${cardInfoHtml}
-        </div>
-        <div class="task-row-edit">
-          <button class="btn-edit-past" data-event="${event.id}" data-task="${task.id}" data-type="${type}" title="編輯過去紀錄">${PENCIL_SVG}</button>
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="task-row">' +
+        '<div class="task-row-content">' +
+          '<div class="task-item' + extraClass + ' ' + (completed ? 'completed' : '') + '" id="taskItem-' + event.id + '-' + task.id + '">' +
+            '<input type="checkbox" class="task-checkbox"' +
+              ' id="task-' + event.id + '-' + task.id + '"' +
+              ' data-event="' + event.id + '"' +
+              ' data-task="' + task.id + '"' +
+              ' data-type="' + type + '"' +
+              (task.cardSelect ? ' data-card-select="true"' : ' data-reward="' + task.reward + '" data-min-reward="' + (task.minReward || task.reward) + '" data-variable="' + (!!task.variable) + '"') +
+              (completed ? ' checked' : '') +
+              dis + '>' +
+            '<div class="task-info">' +
+              '<span class="task-name">' + task.name + '</span>' +
+              '<span class="task-note">' + (task.note || '') + '</span>' +
+            '</div>' +
+            cardSelectHtml +
+            rewardHtml +
+            (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
+          '</div>' +
+          cardInfoHtml +
+        '</div>' +
+        '<div class="task-row-edit">' +
+          '<button class="btn-edit-past" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '" title="編輯過去紀錄"' + dis + '>' + PENCIL_SVG + '</button>' +
+        '</div>' +
+      '</div>';
   }
 
-  function renderMultiClaimTask(event, state, task, type) {
+  function renderMultiClaimTask(event, state, task, type, isEnded) {
     const claims = getTaskCurrentClaims(task.id, type, state, event.startDate);
     const maxClaims = task.claims;
     const isFullyDone = claims >= maxClaims;
     const isPartial = claims > 0 && !isFullyDone;
+    const dis = isEnded ? ' disabled' : '';
 
     let statusClass = '';
     if (isFullyDone) statusClass = 'completed';
@@ -743,40 +824,39 @@
       const weeksDone = (taskState && taskState.bonusWeeksCounted) ? taskState.bonusWeeksCounted.length : 0;
       const target = task.streakBonus.targetWeeks;
       const bonusClaimed = weeksDone >= target;
-      bonusHtml = `
-        <div class="streak-bonus${bonusClaimed ? ' claimed' : ''}">
-          <span>完成${weeksDone}/${target}週額外獎勵${bonusClaimed ? ' ✓' : ''}</span>
-          <span>+${task.streakBonus.reward} ${event.currency}</span>
-        </div>
-      `;
+      bonusHtml = '' +
+        '<div class="streak-bonus' + (bonusClaimed ? ' claimed' : '') + '">' +
+          '<span>完成' + weeksDone + '/' + target + '週額外獎勵' + (bonusClaimed ? ' ✓' : '') + '</span>' +
+          '<span>+' + task.streakBonus.reward + ' ' + event.currency + '</span>' +
+        '</div>';
     }
 
-    return `
-      <div class="task-row">
-        <div class="task-row-content">
-          <div class="task-item${hasBonus} ${statusClass}" id="taskItem-${event.id}-${task.id}">
-            <div class="task-claims-control">
-              <button class="qty-btn task-qty-btn" data-event="${event.id}" data-task="${task.id}" data-type="${type}" data-action="minus" ${claims <= 0 ? 'disabled' : ''}>-</button>
-              <span class="qty-display" id="taskQty-${event.id}-${task.id}">${claims}/${maxClaims}</span>
-              <button class="qty-btn task-qty-btn" data-event="${event.id}" data-task="${task.id}" data-type="${type}" data-action="plus" ${claims >= maxClaims ? 'disabled' : ''}>+</button>
-            </div>
-            <div class="task-info">
-              <span class="task-name">${task.name}</span>
-              <span class="task-note">${task.note || ''}</span>
-            </div>
-            <span class="task-reward">+${claims * task.rewardPerClaim}/${task.reward} ${event.currency}</span>
-            ${task.npc ? `<span class="task-npc">${task.npc}</span>` : ''}
-          </div>
-          ${bonusHtml}
-        </div>
-        <div class="task-row-edit">
-          <button class="btn-edit-past" data-event="${event.id}" data-task="${task.id}" data-type="${type}" title="編輯過去紀錄">${PENCIL_SVG}</button>
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="task-row">' +
+        '<div class="task-row-content">' +
+          '<div class="task-item' + hasBonus + ' ' + statusClass + '" id="taskItem-' + event.id + '-' + task.id + '">' +
+            '<div class="task-claims-control">' +
+              '<button class="qty-btn task-qty-btn" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '" data-action="minus" ' + (claims <= 0 || isEnded ? 'disabled' : '') + '>-</button>' +
+              '<span class="qty-display" id="taskQty-' + event.id + '-' + task.id + '">' + claims + '/' + maxClaims + '</span>' +
+              '<button class="qty-btn task-qty-btn" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '" data-action="plus" ' + (claims >= maxClaims || isEnded ? 'disabled' : '') + '>+</button>' +
+            '</div>' +
+            '<div class="task-info">' +
+              '<span class="task-name">' + task.name + '</span>' +
+              '<span class="task-note">' + (task.note || '') + '</span>' +
+            '</div>' +
+            '<span class="task-reward">+' + (claims * task.rewardPerClaim) + '/' + task.reward + ' ' + event.currency + '</span>' +
+            (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
+          '</div>' +
+          bonusHtml +
+        '</div>' +
+        '<div class="task-row-edit">' +
+          '<button class="btn-edit-past" data-event="' + event.id + '" data-task="' + task.id + '" data-type="' + type + '" title="編輯過去紀錄"' + dis + '>' + PENCIL_SVG + '</button>' +
+        '</div>' +
+      '</div>';
   }
 
-  function renderShop(event, state) {
+  function renderShop(event, state, isEnded) {
+    const dis = isEnded ? ' disabled' : '';
     let itemsHtml = '';
     for (const item of event.shop) {
       const qty = state.shop[item.id] || 0;
@@ -785,198 +865,124 @@
 
       let controlHtml;
       if (item.maxQty === 1) {
-        controlHtml = `
-          <input type="checkbox" class="shop-checkbox"
-            id="shop-${event.id}-${item.id}"
-            data-event="${event.id}"
-            data-item="${item.id}"
-            data-cost="${item.cost}"
-            data-max="1"
-            ${qty > 0 ? 'checked' : ''}>
-        `;
+        controlHtml = '' +
+          '<input type="checkbox" class="shop-checkbox"' +
+            ' id="shop-' + event.id + '-' + item.id + '"' +
+            ' data-event="' + event.id + '"' +
+            ' data-item="' + item.id + '"' +
+            ' data-cost="' + item.cost + '"' +
+            ' data-max="1"' +
+            (qty > 0 ? ' checked' : '') +
+            dis + '>';
       } else {
-        controlHtml = `
-          <button class="qty-btn" data-event="${event.id}" data-item="${item.id}" data-action="minus" ${qty <= 0 ? 'disabled' : ''}>-</button>
-          <span class="qty-display" id="shopQty-${event.id}-${item.id}">${qty}/${item.maxQty}</span>
-          <button class="qty-btn" data-event="${event.id}" data-item="${item.id}" data-action="plus" ${qty >= item.maxQty ? 'disabled' : ''}>+</button>
-          <button class="qty-btn shop-max-btn" data-event="${event.id}" data-item="${item.id}" ${qty >= item.maxQty ? 'disabled' : ''}>MAX</button>
-        `;
+        controlHtml = '' +
+          '<button class="qty-btn" data-event="' + event.id + '" data-item="' + item.id + '" data-action="minus" ' + (qty <= 0 || isEnded ? 'disabled' : '') + '>-</button>' +
+          '<span class="qty-display" id="shopQty-' + event.id + '-' + item.id + '">' + qty + '/' + item.maxQty + '</span>' +
+          '<button class="qty-btn" data-event="' + event.id + '" data-item="' + item.id + '" data-action="plus" ' + (qty >= item.maxQty || isEnded ? 'disabled' : '') + '>+</button>' +
+          '<button class="qty-btn shop-max-btn" data-event="' + event.id + '" data-item="' + item.id + '" ' + (qty >= item.maxQty || isEnded ? 'disabled' : '') + '>MAX</button>';
       }
 
-      itemsHtml += `
-        <div class="shop-item ${isPurchased ? 'purchased' : ''}" id="shopItem-${event.id}-${item.id}">
-          <div class="shop-info">
-            <span class="shop-name">${item.name}</span>
-            <span class="shop-cost">${item.cost} ${event.currency} / 個 ${item.note ? '・' + item.note : ''}</span>
-          </div>
-          <div class="shop-controls">
-            ${controlHtml}
-          </div>
-          <span class="shop-total-cost" id="shopCost-${event.id}-${item.id}">${totalCost > 0 ? '-' + totalCost : ''}</span>
-        </div>
-      `;
+      itemsHtml += '' +
+        '<div class="shop-item ' + (isPurchased ? 'purchased' : '') + '" id="shopItem-' + event.id + '-' + item.id + '">' +
+          '<div class="shop-info">' +
+            '<span class="shop-name">' + item.name + '</span>' +
+            '<span class="shop-cost">' + item.cost + ' ' + event.currency + ' / 個 ' + (item.note ? '・' + item.note : '') + '</span>' +
+          '</div>' +
+          '<div class="shop-controls">' +
+            controlHtml +
+          '</div>' +
+          '<span class="shop-total-cost" id="shopCost-' + event.id + '-' + item.id + '">' + (totalCost > 0 ? '-' + totalCost : '') + '</span>' +
+        '</div>';
     }
 
-    const shopCollapsed = isSectionCollapsed(`shop-${event.id}`);
+    const shopCollapsed = isSectionCollapsed('shop-' + event.id);
 
-    return `
-      <div class="section" id="shopSection-${event.id}">
-        <div class="section-header" data-section="shop-${event.id}">
-          <h3>${event.currency}商店</h3>
-          <span class="toggle-icon${shopCollapsed ? ' collapsed' : ''}" id="toggleIcon-shop-${event.id}">&#9660;</span>
-        </div>
-        <div class="section-body${shopCollapsed ? ' collapsed' : ''}" id="sectionBody-shop-${event.id}">
-          ${itemsHtml}
-        </div>
-      </div>
-    `;
+    return '' +
+      '<div class="section" id="shopSection-' + event.id + '">' +
+        '<div class="section-header" data-section="shop-' + event.id + '">' +
+          '<h3>' + event.currency + '商店</h3>' +
+          '<span class="toggle-icon' + (shopCollapsed ? ' collapsed' : '') + '" id="toggleIcon-shop-' + event.id + '">&#9660;</span>' +
+        '</div>' +
+        '<div class="section-body' + (shopCollapsed ? ' collapsed' : '') + '" id="sectionBody-shop-' + event.id + '">' +
+          itemsHtml +
+        '</div>' +
+      '</div>';
   }
 
   function renderResetButton(event) {
-    return `
-      <div class="reset-section">
-        <button class="btn-reset" id="resetBtn-${event.id}">重置所有資料</button>
-      </div>
-    `;
+    return '' +
+      '<div class="reset-section">' +
+        '<button class="btn-reset" id="resetBtn-' + event.id + '">重置所有資料</button>' +
+      '</div>';
   }
 
   // ===== Summary Update (without full re-render) =====
 
   function updateSummaryDisplay(event, state) {
     const totals = calculateTotals(event, state);
-    const earnedEl = document.getElementById(`totalEarned-${event.id}`);
-    const spentEl = document.getElementById(`totalSpent-${event.id}`);
-    const balanceEl = document.getElementById(`balance-${event.id}`);
+    const earnedEl = document.getElementById('totalEarned-' + event.id);
+    const spentEl = document.getElementById('totalSpent-' + event.id);
+    const balanceEl = document.getElementById('balance-' + event.id);
     if (earnedEl) earnedEl.textContent = totals.earned;
     if (spentEl) spentEl.textContent = totals.spent;
     if (balanceEl) balanceEl.textContent = totals.balance;
 
-    const subtitleEl = document.getElementById(`earnedSubtitle-${event.id}`);
+    const subtitleEl = document.getElementById('earnedSubtitle-' + event.id);
     if (subtitleEl) {
       const maxEarnable = calculateMaxEarnable(event);
       const remaining = maxEarnable - totals.earned;
-      subtitleEl.textContent = `活動結束前還可以獲得: ${remaining} 個${event.currency}`;
+      subtitleEl.textContent = '活動結束前還可以獲得: ' + remaining + ' 個' + event.currency;
     }
   }
 
   // ===== Event Handlers =====
 
-  function bindEventSelector() {
-    document.querySelectorAll('.event-tab').forEach(tab => {
-      tab.addEventListener('click', function () {
-        const eventId = this.dataset.eventId;
-        if (eventId === currentEventId) return;
-        localStorage.setItem('artale_selected_event', eventId);
-        renderApp();
-      });
+  function bindDropdown(events) {
+    const dropdown = document.getElementById('eventDropdown');
+    if (!dropdown) return;
+
+    dropdown.addEventListener('change', function () {
+      const val = this.value;
+      if (!val) return;
+
+      if (val === '__current__') {
+        // Navigate to active event sub-page, or hub if none
+        const active = getActiveEvent(events);
+        if (active) {
+          window.location.href = getEventUrl(active.id);
+        } else {
+          window.location.href = getHubUrl();
+        }
+        return;
+      }
+
+      window.location.href = getEventUrl(val);
     });
   }
 
-  function bindEventHandlers(event, state) {
-    // Section toggle (collapsible) with persistence
-    document.querySelectorAll(`[data-section]`).forEach(header => {
+  function bindEventHandlers(event, state, isEnded) {
+    // Section toggle (collapsible) with persistence - always available
+    document.querySelectorAll('[data-section]').forEach(function (header) {
       const sectionKey = header.dataset.section;
       if (!sectionKey.endsWith(event.id)) return;
       header.addEventListener('click', function () {
         toggleCollapsedState(sectionKey);
-        const body = document.getElementById(`sectionBody-${sectionKey}`);
-        const icon = document.getElementById(`toggleIcon-${sectionKey}`);
+        const body = document.getElementById('sectionBody-' + sectionKey);
+        const icon = document.getElementById('toggleIcon-' + sectionKey);
         if (body) body.classList.toggle('collapsed');
         if (icon) icon.classList.toggle('collapsed');
       });
     });
 
-    // Check-in button
-    const checkinBtn = document.getElementById(`checkinBtn-${event.id}`);
-    if (checkinBtn) {
-      checkinBtn.addEventListener('click', function () {
-        handleCheckin(event, state);
-      });
-    }
-
-    // Check-in undo button
-    const checkinUndo = document.getElementById(`checkinUndo-${event.id}`);
-    if (checkinUndo) {
-      checkinUndo.addEventListener('click', function () {
-        handleCheckinUndo(event, state);
-      });
-    }
-
-    // Task checkboxes
-    document.querySelectorAll(`.task-checkbox[data-event="${event.id}"]`).forEach(cb => {
-      cb.addEventListener('change', function () {
-        handleTaskToggle(event, state, this);
-      });
-    });
-
-    // Variable reward selects
-    document.querySelectorAll(`.task-reward-select[data-event="${event.id}"]`).forEach(sel => {
-      sel.addEventListener('change', function () {
-        handleRewardChange(event, state, this);
-      });
-    });
-
-    // Card select dropdowns
-    document.querySelectorAll(`.card-select[data-event="${event.id}"]`).forEach(sel => {
-      sel.addEventListener('change', function () {
-        handleCardChange(event, state, this);
-      });
-    });
-
-    // Task +/- buttons (multi-claim)
-    document.querySelectorAll(`.task-qty-btn[data-event="${event.id}"]`).forEach(btn => {
-      btn.addEventListener('click', function () {
-        handleTaskQty(event, state, this);
-      });
-    });
-
-    // Edit past record buttons (tasks)
-    document.querySelectorAll(`.btn-edit-past[data-task][data-event="${event.id}"]`).forEach(btn => {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        showEditPastModal(event, state, this.dataset.task);
-      });
-    });
-
-    // Edit past record button (check-in)
-    const editCheckinBtn = document.getElementById(`editCheckin-${event.id}`);
-    if (editCheckinBtn) {
-      editCheckinBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        showEditCheckinModal(event, state);
-      });
-    }
-
-    // Shop checkboxes (for maxQty=1 items)
-    document.querySelectorAll(`.shop-checkbox[data-event="${event.id}"]`).forEach(cb => {
-      cb.addEventListener('change', function () {
-        handleShopCheckbox(event, state, this);
-      });
-    });
-
-    // Shop +/- buttons
-    document.querySelectorAll(`.qty-btn[data-event="${event.id}"]:not(.task-qty-btn):not(.shop-max-btn)`).forEach(btn => {
-      btn.addEventListener('click', function () {
-        handleShopQty(event, state, this);
-      });
-    });
-
-    // Shop MAX buttons
-    document.querySelectorAll(`.shop-max-btn[data-event="${event.id}"]`).forEach(btn => {
-      btn.addEventListener('click', function () {
-        handleShopMax(event, state, this);
-      });
-    });
-
-    // Summary card click handlers (history modal)
-    document.querySelectorAll(`.summary-card[data-filter][data-event="${event.id}"]`).forEach(card => {
+    // Summary card click handlers (history modal) - always available
+    document.querySelectorAll('.summary-card[data-filter][data-event="' + event.id + '"]').forEach(function (card) {
       card.addEventListener('click', function () {
         showHistoryModal(event, state, this.dataset.filter);
       });
     });
 
-    // Reset button
-    const resetBtn = document.getElementById(`resetBtn-${event.id}`);
+    // Reset button - always available
+    const resetBtn = document.getElementById('resetBtn-' + event.id);
     if (resetBtn) {
       resetBtn.addEventListener('click', function () {
         if (confirm('確定要重置所有資料嗎？此操作無法復原。')) {
@@ -985,6 +991,91 @@
         }
       });
     }
+
+    // Skip interactive handlers if event has ended
+    if (isEnded) return;
+
+    // Check-in button
+    const checkinBtn = document.getElementById('checkinBtn-' + event.id);
+    if (checkinBtn) {
+      checkinBtn.addEventListener('click', function () {
+        handleCheckin(event, state);
+      });
+    }
+
+    // Check-in undo button
+    const checkinUndo = document.getElementById('checkinUndo-' + event.id);
+    if (checkinUndo) {
+      checkinUndo.addEventListener('click', function () {
+        handleCheckinUndo(event, state);
+      });
+    }
+
+    // Task checkboxes
+    document.querySelectorAll('.task-checkbox[data-event="' + event.id + '"]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        handleTaskToggle(event, state, this);
+      });
+    });
+
+    // Variable reward selects
+    document.querySelectorAll('.task-reward-select[data-event="' + event.id + '"]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        handleRewardChange(event, state, this);
+      });
+    });
+
+    // Card select dropdowns
+    document.querySelectorAll('.card-select[data-event="' + event.id + '"]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        handleCardChange(event, state, this);
+      });
+    });
+
+    // Task +/- buttons (multi-claim)
+    document.querySelectorAll('.task-qty-btn[data-event="' + event.id + '"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleTaskQty(event, state, this);
+      });
+    });
+
+    // Edit past record buttons (tasks)
+    document.querySelectorAll('.btn-edit-past[data-task][data-event="' + event.id + '"]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        showEditPastModal(event, state, this.dataset.task);
+      });
+    });
+
+    // Edit past record button (check-in)
+    const editCheckinBtn = document.getElementById('editCheckin-' + event.id);
+    if (editCheckinBtn) {
+      editCheckinBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        showEditCheckinModal(event, state);
+      });
+    }
+
+    // Shop checkboxes (for maxQty=1 items)
+    document.querySelectorAll('.shop-checkbox[data-event="' + event.id + '"]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        handleShopCheckbox(event, state, this);
+      });
+    });
+
+    // Shop +/- buttons
+    document.querySelectorAll('.qty-btn[data-event="' + event.id + '"]:not(.task-qty-btn):not(.shop-max-btn)').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleShopQty(event, state, this);
+      });
+    });
+
+    // Shop MAX buttons
+    document.querySelectorAll('.shop-max-btn[data-event="' + event.id + '"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleShopMax(event, state, this);
+      });
+    });
   }
 
   function handleCheckin(event, state) {
@@ -997,7 +1088,7 @@
 
     for (const m of event.checkin.milestones) {
       if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
-        addHistoryEntry(state, 'earn', `checkin_day${m.day}`, m.reward);
+        addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
       }
     }
 
@@ -1012,7 +1103,7 @@
 
     for (const m of event.checkin.milestones) {
       if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
-        removeHistoryEntry(state, 'earn', `checkin_day${m.day}`, m.reward);
+        removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
       }
     }
 
@@ -1024,43 +1115,47 @@
   }
 
   function rerenderCheckin(event, state) {
-    const section = document.getElementById(`checkinSection-${event.id}`);
+    const section = document.getElementById('checkinSection-' + event.id);
     if (!section) return;
 
+    const isEnded = getEventStatus(event) === 'ended';
     const temp = document.createElement('div');
-    temp.innerHTML = renderCheckin(event, state);
+    temp.innerHTML = renderCheckin(event, state, isEnded);
     const newSection = temp.firstElementChild;
 
     section.replaceWith(newSection);
 
-    const checkinBtn = document.getElementById(`checkinBtn-${event.id}`);
-    if (checkinBtn) {
-      checkinBtn.addEventListener('click', function () {
-        handleCheckin(event, state);
-      });
+    if (!isEnded) {
+      const checkinBtn = document.getElementById('checkinBtn-' + event.id);
+      if (checkinBtn) {
+        checkinBtn.addEventListener('click', function () {
+          handleCheckin(event, state);
+        });
+      }
+      const checkinUndo = document.getElementById('checkinUndo-' + event.id);
+      if (checkinUndo) {
+        checkinUndo.addEventListener('click', function () {
+          handleCheckinUndo(event, state);
+        });
+      }
+      const editCheckinBtn = document.getElementById('editCheckin-' + event.id);
+      if (editCheckinBtn) {
+        editCheckinBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          showEditCheckinModal(event, state);
+        });
+      }
     }
-    const checkinUndo = document.getElementById(`checkinUndo-${event.id}`);
-    if (checkinUndo) {
-      checkinUndo.addEventListener('click', function () {
-        handleCheckinUndo(event, state);
-      });
-    }
+
     const header = newSection.querySelector('.section-header');
     if (header) {
       header.addEventListener('click', function () {
         const sectionKey = this.dataset.section;
         toggleCollapsedState(sectionKey);
-        const body = document.getElementById(`sectionBody-${sectionKey}`);
-        const icon = document.getElementById(`toggleIcon-${sectionKey}`);
+        const body = document.getElementById('sectionBody-' + sectionKey);
+        const icon = document.getElementById('toggleIcon-' + sectionKey);
         if (body) body.classList.toggle('collapsed');
         if (icon) icon.classList.toggle('collapsed');
-      });
-    }
-    const editCheckinBtn = document.getElementById(`editCheckin-${event.id}`);
-    if (editCheckinBtn) {
-      editCheckinBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        showEditCheckinModal(event, state);
       });
     }
   }
@@ -1109,7 +1204,7 @@
     if (isVariable || isCardSelect) {
       rerenderTasks(event, state);
     } else {
-      const taskItem = document.getElementById(`taskItem-${event.id}-${taskId}`);
+      const taskItem = document.getElementById('taskItem-' + event.id + '-' + taskId);
       if (taskItem) {
         taskItem.classList.toggle('completed', checkbox.checked);
       }
@@ -1176,11 +1271,12 @@
   }
 
   function rerenderTasks(event, state) {
-    const section = document.getElementById(`tasksSection-${event.id}`);
+    const section = document.getElementById('tasksSection-' + event.id);
     if (!section) return;
 
+    const isEnded = getEventStatus(event) === 'ended';
     const temp = document.createElement('div');
-    temp.innerHTML = renderTasks(event, state);
+    temp.innerHTML = renderTasks(event, state, isEnded);
     const newSection = temp.firstElementChild;
 
     section.replaceWith(newSection);
@@ -1190,43 +1286,45 @@
       header.addEventListener('click', function () {
         const sectionKey = this.dataset.section;
         toggleCollapsedState(sectionKey);
-        const body = document.getElementById(`sectionBody-${sectionKey}`);
-        const icon = document.getElementById(`toggleIcon-${sectionKey}`);
+        const body = document.getElementById('sectionBody-' + sectionKey);
+        const icon = document.getElementById('toggleIcon-' + sectionKey);
         if (body) body.classList.toggle('collapsed');
         if (icon) icon.classList.toggle('collapsed');
       });
     }
 
-    newSection.querySelectorAll(`.task-checkbox[data-event="${event.id}"]`).forEach(cb => {
-      cb.addEventListener('change', function () {
-        handleTaskToggle(event, state, this);
+    if (!isEnded) {
+      newSection.querySelectorAll('.task-checkbox[data-event="' + event.id + '"]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          handleTaskToggle(event, state, this);
+        });
       });
-    });
 
-    newSection.querySelectorAll(`.task-reward-select[data-event="${event.id}"]`).forEach(sel => {
-      sel.addEventListener('change', function () {
-        handleRewardChange(event, state, this);
+      newSection.querySelectorAll('.task-reward-select[data-event="' + event.id + '"]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          handleRewardChange(event, state, this);
+        });
       });
-    });
 
-    newSection.querySelectorAll(`.card-select[data-event="${event.id}"]`).forEach(sel => {
-      sel.addEventListener('change', function () {
-        handleCardChange(event, state, this);
+      newSection.querySelectorAll('.card-select[data-event="' + event.id + '"]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          handleCardChange(event, state, this);
+        });
       });
-    });
 
-    newSection.querySelectorAll(`.task-qty-btn[data-event="${event.id}"]`).forEach(btn => {
-      btn.addEventListener('click', function () {
-        handleTaskQty(event, state, this);
+      newSection.querySelectorAll('.task-qty-btn[data-event="' + event.id + '"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          handleTaskQty(event, state, this);
+        });
       });
-    });
 
-    newSection.querySelectorAll(`.btn-edit-past[data-task][data-event="${event.id}"]`).forEach(btn => {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        showEditPastModal(event, state, this.dataset.task);
+      newSection.querySelectorAll('.btn-edit-past[data-task][data-event="' + event.id + '"]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          showEditPastModal(event, state, this.dataset.task);
+        });
       });
-    });
+    }
 
     // Immediately populate countdown text so it doesn't flash empty
     const now = new Date();
@@ -1236,7 +1334,7 @@
       biweekly: getNextBiweeklyReset(event.startDate)
     };
     for (const type in groupResetMap) {
-      const el = document.getElementById(`taskGroupReset-${event.id}-${type}`);
+      const el = document.getElementById('taskGroupReset-' + event.id + '-' + type);
       if (el) {
         el.textContent = formatResetLabel(groupResetMap[type].getTime() - now.getTime());
       }
@@ -1293,7 +1391,7 @@
 
   function handleShopCheckbox(event, state, checkbox) {
     const itemId = checkbox.dataset.item;
-    const item = event.shop.find(i => i.id === itemId);
+    const item = event.shop.find(function (i) { return i.id === itemId; });
     if (!item) return;
 
     if (checkbox.checked) {
@@ -1305,10 +1403,10 @@
     }
     saveState(event.id, state);
 
-    const shopItem = document.getElementById(`shopItem-${event.id}-${itemId}`);
+    const shopItem = document.getElementById('shopItem-' + event.id + '-' + itemId);
     if (shopItem) shopItem.classList.toggle('purchased', checkbox.checked);
 
-    const costEl = document.getElementById(`shopCost-${event.id}-${itemId}`);
+    const costEl = document.getElementById('shopCost-' + event.id + '-' + itemId);
     if (costEl) {
       const total = (state.shop[itemId] || 0) * item.cost;
       costEl.textContent = total > 0 ? '-' + total : '';
@@ -1320,7 +1418,7 @@
   function handleShopQty(event, state, button) {
     const itemId = button.dataset.item;
     const action = button.dataset.action;
-    const item = event.shop.find(i => i.id === itemId);
+    const item = event.shop.find(function (i) { return i.id === itemId; });
     if (!item) return;
 
     let qty = state.shop[itemId] || 0;
@@ -1334,16 +1432,16 @@
     state.shop[itemId] = qty;
     saveState(event.id, state);
 
-    const qtyEl = document.getElementById(`shopQty-${event.id}-${itemId}`);
-    if (qtyEl) qtyEl.textContent = `${qty}/${item.maxQty}`;
+    const qtyEl = document.getElementById('shopQty-' + event.id + '-' + itemId);
+    if (qtyEl) qtyEl.textContent = qty + '/' + item.maxQty;
 
-    const costEl = document.getElementById(`shopCost-${event.id}-${itemId}`);
+    const costEl = document.getElementById('shopCost-' + event.id + '-' + itemId);
     if (costEl) {
       const total = qty * item.cost;
       costEl.textContent = total > 0 ? '-' + total : '';
     }
 
-    const shopItem = document.getElementById(`shopItem-${event.id}-${itemId}`);
+    const shopItem = document.getElementById('shopItem-' + event.id + '-' + itemId);
     if (shopItem) shopItem.classList.toggle('purchased', qty > 0);
 
     const parent = button.closest('.shop-controls');
@@ -1361,7 +1459,7 @@
 
   function handleShopMax(event, state, button) {
     const itemId = button.dataset.item;
-    const item = event.shop.find(i => i.id === itemId);
+    const item = event.shop.find(function (i) { return i.id === itemId; });
     if (!item) return;
 
     const currentQty = state.shop[itemId] || 0;
@@ -1374,16 +1472,16 @@
     state.shop[itemId] = item.maxQty;
     saveState(event.id, state);
 
-    const qtyEl = document.getElementById(`shopQty-${event.id}-${itemId}`);
-    if (qtyEl) qtyEl.textContent = `${item.maxQty}/${item.maxQty}`;
+    const qtyEl = document.getElementById('shopQty-' + event.id + '-' + itemId);
+    if (qtyEl) qtyEl.textContent = item.maxQty + '/' + item.maxQty;
 
-    const costEl = document.getElementById(`shopCost-${event.id}-${itemId}`);
+    const costEl = document.getElementById('shopCost-' + event.id + '-' + itemId);
     if (costEl) {
       const total = item.maxQty * item.cost;
       costEl.textContent = total > 0 ? '-' + total : '';
     }
 
-    const shopItem = document.getElementById(`shopItem-${event.id}-${itemId}`);
+    const shopItem = document.getElementById('shopItem-' + event.id + '-' + itemId);
     if (shopItem) shopItem.classList.add('purchased');
 
     const parent = button.closest('.shop-controls');
@@ -1418,11 +1516,11 @@
     }
     const task = findTask(event, source);
     if (task) return task.name;
-    const shopItem = event.shop.find(i => i.id === source);
+    const shopItem = event.shop.find(function (i) { return i.id === source; });
     if (shopItem) return shopItem.name;
     if (source.startsWith('checkin_day')) {
       const day = source.replace('checkin_day', '');
-      return `簽到第${day}天獎勵`;
+      return '簽到第' + day + '天獎勵';
     }
     return source;
   }
@@ -1430,36 +1528,35 @@
   function showHistoryModal(event, state, filterType) {
     const dates = Object.keys(state.history || {}).sort().reverse();
     const title = filterType === 'earn'
-      ? `已獲得 ${event.currency} 明細`
-      : `已使用 ${event.currency} 明細`;
+      ? '已獲得 ' + event.currency + ' 明細'
+      : '已使用 ' + event.currency + ' 明細';
     const sign = filterType === 'earn' ? '+' : '-';
 
     let bodyHtml = '';
 
     for (const dateKey of dates) {
       const dayMap = state.history[dateKey] || {};
-      const entries = Object.values(dayMap).filter(e => e.type === filterType);
+      const entries = Object.values(dayMap).filter(function (e) { return e.type === filterType; });
       if (entries.length === 0) continue;
 
-      const dayTotal = entries.reduce((sum, e) => sum + e.amount, 0);
+      const dayTotal = entries.reduce(function (sum, e) { return sum + e.amount; }, 0);
 
       let entriesHtml = '';
       for (const entry of entries) {
         const name = resolveSourceName(event, entry.source);
         const isManual = entry.source.endsWith('_past');
         const manualTag = isManual ? '<span class="history-manual-tag">手動補登</span>' : '';
-        entriesHtml += `<div class="history-entry${isManual ? ' history-entry-manual' : ''}"><span>${name}${manualTag}</span><span>${sign}${entry.amount}</span></div>`;
+        entriesHtml += '<div class="history-entry' + (isManual ? ' history-entry-manual' : '') + '"><span>' + name + manualTag + '</span><span>' + sign + entry.amount + '</span></div>';
       }
 
-      bodyHtml += `
-        <div class="history-day">
-          <div class="history-day-header">
-            <span>${dateKey}</span>
-            <span>${sign}${dayTotal} ${event.currency}</span>
-          </div>
-          ${entriesHtml}
-        </div>
-      `;
+      bodyHtml += '' +
+        '<div class="history-day">' +
+          '<div class="history-day-header">' +
+            '<span>' + dateKey + '</span>' +
+            '<span>' + sign + dayTotal + ' ' + event.currency + '</span>' +
+          '</div>' +
+          entriesHtml +
+        '</div>';
     }
 
     if (!bodyHtml) {
@@ -1467,17 +1564,16 @@
     }
 
     const modal = document.createElement('div');
-    modal.className = `history-overlay history-${filterType}`;
+    modal.className = 'history-overlay history-' + filterType;
     modal.id = 'historyModal';
-    modal.innerHTML = `
-      <div class="history-modal">
-        <div class="history-modal-header">
-          <h3>${title}</h3>
-          <button class="history-close" id="historyClose">&times;</button>
-        </div>
-        <div class="history-modal-body">${bodyHtml}</div>
-      </div>
-    `;
+    modal.innerHTML = '' +
+      '<div class="history-modal">' +
+        '<div class="history-modal-header">' +
+          '<h3>' + title + '</h3>' +
+          '<button class="history-close" id="historyClose">&times;</button>' +
+        '</div>' +
+        '<div class="history-modal-body">' + bodyHtml + '</div>' +
+      '</div>';
 
     document.body.appendChild(modal);
 
@@ -1507,23 +1603,22 @@
     const modal = document.createElement('div');
     modal.className = 'edit-past-overlay';
     modal.id = 'editPastModal';
-    modal.innerHTML = `
-      <div class="edit-past-modal">
-        <div class="edit-past-modal-header">
-          <h3>編輯過去紀錄</h3>
-          <button class="edit-past-close" id="editPastClose">&times;</button>
-        </div>
-        <div class="edit-past-modal-body">
-          <span class="edit-past-label">${task.name}</span>
-          <div class="edit-past-controls">
-            <button class="qty-btn" id="editPastMinus" ${pastReward <= 0 ? 'disabled' : ''}>-</button>
-            <span class="edit-past-value" id="editPastValue">${pastReward}</span>
-            <button class="qty-btn" id="editPastPlus">+</button>
-          </div>
-          <div class="edit-past-reward-info">每次 ±${unitReward} ${event.currency}</div>
-        </div>
-      </div>
-    `;
+    modal.innerHTML = '' +
+      '<div class="edit-past-modal">' +
+        '<div class="edit-past-modal-header">' +
+          '<h3>編輯過去紀錄</h3>' +
+          '<button class="edit-past-close" id="editPastClose">&times;</button>' +
+        '</div>' +
+        '<div class="edit-past-modal-body">' +
+          '<span class="edit-past-label">' + task.name + '</span>' +
+          '<div class="edit-past-controls">' +
+            '<button class="qty-btn" id="editPastMinus" ' + (pastReward <= 0 ? 'disabled' : '') + '>-</button>' +
+            '<span class="edit-past-value" id="editPastValue">' + pastReward + '</span>' +
+            '<button class="qty-btn" id="editPastPlus">+</button>' +
+          '</div>' +
+          '<div class="edit-past-reward-info">每次 ±' + unitReward + ' ' + event.currency + '</div>' +
+        '</div>' +
+      '</div>';
 
     document.body.appendChild(modal);
 
@@ -1572,23 +1667,22 @@
     const modal = document.createElement('div');
     modal.className = 'edit-past-overlay';
     modal.id = 'editPastModal';
-    modal.innerHTML = `
-      <div class="edit-past-modal">
-        <div class="edit-past-modal-header">
-          <h3>編輯簽到紀錄</h3>
-          <button class="edit-past-close" id="editPastClose">&times;</button>
-        </div>
-        <div class="edit-past-modal-body">
-          <span class="edit-past-label">調整已簽到天數</span>
-          <div class="edit-past-controls">
-            <button class="qty-btn" id="editCheckinMinus" ${count <= 0 ? 'disabled' : ''}>-</button>
-            <span class="edit-past-value" id="editCheckinValue">${count} / ${maxDays}</span>
-            <button class="qty-btn" id="editCheckinPlus" ${count >= theoreticalMax ? 'disabled' : ''}>+</button>
-          </div>
-          <div class="edit-past-reward-info">最多可簽到 ${theoreticalMax} 天（活動已開始 ${daysSinceStart} 天）</div>
-        </div>
-      </div>
-    `;
+    modal.innerHTML = '' +
+      '<div class="edit-past-modal">' +
+        '<div class="edit-past-modal-header">' +
+          '<h3>編輯簽到紀錄</h3>' +
+          '<button class="edit-past-close" id="editPastClose">&times;</button>' +
+        '</div>' +
+        '<div class="edit-past-modal-body">' +
+          '<span class="edit-past-label">調整已簽到天數</span>' +
+          '<div class="edit-past-controls">' +
+            '<button class="qty-btn" id="editCheckinMinus" ' + (count <= 0 ? 'disabled' : '') + '>-</button>' +
+            '<span class="edit-past-value" id="editCheckinValue">' + count + ' / ' + maxDays + '</span>' +
+            '<button class="qty-btn" id="editCheckinPlus" ' + (count >= theoreticalMax ? 'disabled' : '') + '>+</button>' +
+          '</div>' +
+          '<div class="edit-past-reward-info">最多可簽到 ' + theoreticalMax + ' 天（活動已開始 ' + daysSinceStart + ' 天）</div>' +
+        '</div>' +
+      '</div>';
 
     document.body.appendChild(modal);
 
@@ -1648,36 +1742,34 @@
   let lastDailyPeriod = null;
   let lastWeeklyPeriod = null;
 
-  function updateTimers() {
+  function updateEventTimers(event) {
     const now = new Date();
 
-    for (const event of EVENTS) {
-      const timeEl = document.getElementById(`currentTime-${event.id}`);
-      if (timeEl) timeEl.textContent = `目前時間：${formatLocalTime(now)}`;
+    const timeEl = document.getElementById('currentTime-' + event.id);
+    if (timeEl) timeEl.textContent = '目前時間：' + formatLocalTime(now);
 
-      const nextDaily = getNextDailyReset();
-      const nextWeekly = getNextWeeklyReset();
-      const nextBiweekly = getNextBiweeklyReset(event.startDate);
+    const nextDaily = getNextDailyReset();
+    const nextWeekly = getNextWeeklyReset();
+    const nextBiweekly = getNextBiweeklyReset(event.startDate);
 
-      const dailyEl = document.getElementById(`dailyReset-${event.id}`);
-      if (dailyEl) dailyEl.textContent = formatCountdown(nextDaily.getTime() - now.getTime());
+    const dailyEl = document.getElementById('dailyReset-' + event.id);
+    if (dailyEl) dailyEl.textContent = formatCountdown(nextDaily.getTime() - now.getTime());
 
-      const weeklyEl = document.getElementById(`weeklyReset-${event.id}`);
-      if (weeklyEl) weeklyEl.textContent = formatCountdown(nextWeekly.getTime() - now.getTime());
+    const weeklyEl = document.getElementById('weeklyReset-' + event.id);
+    if (weeklyEl) weeklyEl.textContent = formatCountdown(nextWeekly.getTime() - now.getTime());
 
-      const biweeklyEl = document.getElementById(`biweeklyReset-${event.id}`);
-      if (biweeklyEl) biweeklyEl.textContent = formatCountdown(nextBiweekly.getTime() - now.getTime());
+    const biweeklyEl = document.getElementById('biweeklyReset-' + event.id);
+    if (biweeklyEl) biweeklyEl.textContent = formatCountdown(nextBiweekly.getTime() - now.getTime());
 
-      const groupResetMap = {
-        daily: nextDaily,
-        weekly: nextWeekly,
-        biweekly: nextBiweekly
-      };
-      for (const type in groupResetMap) {
-        const el = document.getElementById(`taskGroupReset-${event.id}-${type}`);
-        if (el) {
-          el.textContent = formatResetLabel(groupResetMap[type].getTime() - now.getTime());
-        }
+    const groupResetMap = {
+      daily: nextDaily,
+      weekly: nextWeekly,
+      biweekly: nextBiweekly
+    };
+    for (const type in groupResetMap) {
+      const el = document.getElementById('taskGroupReset-' + event.id + '-' + type);
+      if (el) {
+        el.textContent = formatResetLabel(groupResetMap[type].getTime() - now.getTime());
       }
     }
 
@@ -1692,6 +1784,19 @@
       renderApp();
     }
     lastWeeklyPeriod = currentWeeklyPeriod;
+  }
+
+  function updateHubTimers() {
+    const now = new Date();
+
+    const timeEl = document.getElementById('currentTime-hub');
+    if (timeEl) timeEl.textContent = '目前時間：' + formatLocalTime(now);
+
+    const dailyEl = document.getElementById('dailyReset-hub');
+    if (dailyEl) dailyEl.textContent = formatCountdown(getNextDailyReset().getTime() - now.getTime());
+
+    const weeklyEl = document.getElementById('weeklyReset-hub');
+    if (weeklyEl) weeklyEl.textContent = formatCountdown(getNextWeeklyReset().getTime() - now.getTime());
   }
 
   // ===== Init =====
