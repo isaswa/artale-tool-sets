@@ -617,8 +617,8 @@ function simulateDayByDay(totalExpNeeded, baseExpPerMin, regularMultiplier,
         // Check optimization: if all global events depleted, remaining days can be fast-tracked
         const allGlobalDepleted = events.every(e => e.remaining <= 0.001);
         if (allGlobalDepleted) {
-            const auraExpRate = baseExpPerMin * (100 + regularMultiplier + auraMultiplier) / 100;
-            const baseExpRate = baseExpPerMin * (100 + regularMultiplier) / 100;
+            const auraExpRate = baseExpPerMin * (100 + regularMultiplier + auraMultiplier) / (100 + regularMultiplier);
+            const baseExpRate = baseExpPerMin;
             const auraTimePerDay = Math.min(AURA_DAILY_MINUTES, dailyMinutes);
             const baseTimePerDay = Math.max(0, dailyMinutes - auraTimePerDay);
             const expPerDayWithAura = (auraExpRate * auraTimePerDay) + (baseExpRate * baseTimePerDay);
@@ -779,7 +779,7 @@ function simulateDayByDay(totalExpNeeded, baseExpPerMin, regularMultiplier,
             const best = combos[0];
 
             // Calculate EXP rate for this phase
-            const expRate = baseExpPerMin * (100 + regularMultiplier + best.multiplier) / 100;
+            const expRate = baseExpPerMin * (100 + regularMultiplier + best.multiplier) / (100 + regularMultiplier);
             const timeToFinish = remainingExp / expRate;
             const actualDuration = Math.min(best.duration, timeToFinish);
 
@@ -878,10 +878,10 @@ function calculateResults(e) {
     const baseExpEfficiency = currentUnit === 'man' ? expEfficiency * 10000 : expEfficiency;
 
     // Calculate regular multiplier
-    const regularMultiplier = calculateRegularMultiplier();
+    const regularMultiplier = calculateRegularMultiplier(); // For display only
 
-    // Apply regular buffs to the base exp efficiency
-    const regularExpPerTenMin = baseExpEfficiency * (100 + regularMultiplier) / 100;
+    // The input already includes regular buffs, so we use it directly
+    const regularExpPerTenMin = baseExpEfficiency;
 
     // Get event details
     const hasCoupon = document.getElementById('expCoupon').checked;
@@ -982,7 +982,7 @@ function calculateResults(e) {
 
             while (currentEvents.length > 0 && remainingExp > 0) {
                 const totalEventMultiplier = currentEvents.reduce((sum, e) => sum + e.multiplier, 0);
-                const expRate = baseExpEfficiency * (100 + regularMultiplier + totalEventMultiplier) / 100;
+                const expRate = baseExpEfficiency * (100 + regularMultiplier + totalEventMultiplier) / (100 + regularMultiplier);
                 const expPerMinute = expRate / 10;
 
                 const nextExpiration = Math.min(...currentEvents.map(e => e.duration));
@@ -1070,7 +1070,7 @@ function calculateResults(e) {
                 let nlEvents = [...activeEvents];
                 while (nlEvents.length > 0 && nlRemaining > 0) {
                     const totalMult = nlEvents.reduce((sum, e) => sum + e.multiplier, 0);
-                    const expRate = baseExpEfficiency * (100 + regularMultiplier + totalMult) / 100;
+                    const expRate = baseExpEfficiency * (100 + regularMultiplier + totalMult) / (100 + regularMultiplier);
                     const expPerMin = expRate / 10;
                     const nextExp = Math.min(...nlEvents.map(e => e.duration));
                     const phaseDur = nextExp - nlTime;
