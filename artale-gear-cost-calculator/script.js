@@ -790,6 +790,7 @@ function updateRanking() {
     let newMain = main + deltaMain;
     let newSec = secondary + deltaSec;
     let respecNote = null;
+    let hasOverflow = false;
 
     if (lockEnabled) {
       if (job.secondary_stat === 'STR+DEX') {
@@ -815,6 +816,7 @@ function updateRanking() {
 
         const additionalRespec = newExcess - curExcess;
         if (additionalRespec > 0) {
+          hasOverflow = true;
           respecNote = '需要洗點(' + lockStat.toUpperCase() + '-' + additionalRespec + ')';
         }
       } else {
@@ -829,6 +831,7 @@ function updateRanking() {
 
         const additionalRespec = newExcess - curExcess;
         if (additionalRespec > 0) {
+          hasOverflow = true;
           respecNote = '需要洗點(' + job.secondary_stat + '-' + additionalRespec + ')';
         }
       }
@@ -844,11 +847,13 @@ function updateRanking() {
     return {
       slotId,
       slotName: slotMeta ? slotMeta.name : slotId,
-      deltaMain, deltaSec, deltaWatk, deltaAtk,
+      deltaMain: newMain - baseMain,
+      deltaSec: newSec - baseSec,
+      deltaWatk, deltaAtk,
       costRaw: p.cost,
       costUnit: p.costUnit,
       costInWan, costPer,
-      respecNote
+      respecNote, hasOverflow
     };
   });
 
@@ -872,6 +877,9 @@ function updateRanking() {
     html += '<span class="' + deltaClass + '">表攻 ' + (r.deltaAtk >= 0 ? '+' : '') + r.deltaAtk + '</span>';
     html += '<span>主屬 ' + (r.deltaMain >= 0 ? '+' : '') + r.deltaMain + '</span>';
     html += '<span>副屬 ' + (r.deltaSec >= 0 ? '+' : '') + r.deltaSec + '</span>';
+    if (r.hasOverflow) {
+      html += '<span class="rank-overflow-hint">(溢出部分已轉換)</span>';
+    }
     if (r.deltaWatk !== 0) {
       html += '<span>WATK ' + (r.deltaWatk >= 0 ? '+' : '') + r.deltaWatk + '</span>';
     }
