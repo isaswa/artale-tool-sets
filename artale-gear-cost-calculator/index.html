@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artale裝備成本計算機</title>
+  <link rel="stylesheet" href="../common/header.css">
+  <link rel="stylesheet" href="../common/theme.css">
+  <link rel="stylesheet" href="../common/nav.css">
+  <link rel="stylesheet" href="../common/footer.css">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function() {
+      var keys = ['theme', 'artale_theme', 'nshot-theme'];
+      for (var i = 0; i < keys.length; i++) {
+        if (localStorage.getItem(keys[i]) === 'light') {
+          document.documentElement.classList.add('light-early');
+          break;
+        }
+      }
+    })();
+  </script>
+  <style>html.light-early body { background-color: #eef2f7; color: #333333; }</style>
+</head>
+<body data-tool="gear" data-tool-title="Artale裝備成本計算機">
+
+  <main class="container">
+    <!-- Left / Top: Equipment Grid + Swap Form -->
+    <section class="panel" id="equip-panel">
+      <h2>裝備欄</h2>
+
+      <div class="equip-grid" id="equip-grid">
+        <!-- Row 1: hat only -->
+        <div class="equip-slot" data-slot="hat" style="grid-row:1;grid-column:2" title="帽子">
+          <span class="slot-icon">🎩</span><span class="slot-label">帽子</span>
+        </div>
+
+        <!-- Row 2: medal, face, ring1, ring2 -->
+        <div class="equip-slot" data-slot="medal" style="grid-row:2;grid-column:1" title="勳章">
+          <span class="slot-icon">🏅</span><span class="slot-label">勳章</span>
+        </div>
+        <div class="equip-slot" data-slot="face" style="grid-row:2;grid-column:2" title="臉飾">
+          <span class="slot-icon">🎭</span><span class="slot-label">臉飾</span>
+        </div>
+        <div class="equip-slot" data-slot="ring1" style="grid-row:2;grid-column:4" title="戒指1">
+          <span class="slot-icon">💍</span><span class="slot-label">戒指</span>
+        </div>
+        <div class="equip-slot" data-slot="ring2" style="grid-row:2;grid-column:5" title="戒指2">
+          <span class="slot-icon">💍</span><span class="slot-label">戒指</span>
+        </div>
+
+        <!-- Row 3: eye, earring, shoulder -->
+        <div class="equip-slot" data-slot="eye" style="grid-row:3;grid-column:3" title="眼飾">
+          <span class="slot-icon">👓</span><span class="slot-label">眼飾</span>
+        </div>
+        <div class="equip-slot" data-slot="earring" style="grid-row:3;grid-column:4" title="耳環">
+          <span class="slot-icon">✨</span><span class="slot-label">耳環</span>
+        </div>
+        <div class="equip-slot" data-slot="shoulder" style="grid-row:3;grid-column:5" title="肩膀">
+          <span class="slot-icon">🦺</span><span class="slot-label">肩膀</span>
+        </div>
+
+        <!-- Row 4: cape, top/overall, pendant(項鍊), weapon, shield -->
+        <div class="equip-slot" data-slot="cape" style="grid-row:4;grid-column:1" title="披風">
+          <span class="slot-icon">🧣</span><span class="slot-label">披風</span>
+        </div>
+        <div class="equip-slot" data-slot="top" id="top-slot" style="grid-row:4;grid-column:2" title="上衣">
+          <span class="slot-icon">👕</span><span class="slot-label">上衣</span>
+        </div>
+        <div class="equip-slot" data-slot="pendant" style="grid-row:4;grid-column:3" title="項鍊">
+          <span class="slot-icon">📿</span><span class="slot-label">項鍊</span>
+        </div>
+        <div class="equip-slot has-watk" data-slot="weapon" style="grid-row:4;grid-column:4" title="武器">
+          <span class="slot-icon">⚔️</span><span class="slot-label">武器</span>
+        </div>
+        <div class="equip-slot" data-slot="shield" style="grid-row:4;grid-column:5" title="盾牌">
+          <span class="slot-icon">🛡️</span><span class="slot-label">盾牌</span>
+        </div>
+
+        <!-- Row 5: glove, bottom, belt, ring3, ring4 -->
+        <div class="equip-slot has-watk" data-slot="glove" style="grid-row:5;grid-column:1" title="手套">
+          <span class="slot-icon">🧤</span><span class="slot-label">手套</span>
+        </div>
+        <div class="equip-slot" data-slot="bottom" id="bottom-slot" style="grid-row:5;grid-column:2" title="下衣">
+          <span class="slot-icon">👖</span><span class="slot-label">下衣</span>
+        </div>
+        <div class="equip-slot" data-slot="belt" style="grid-row:5;grid-column:3" title="腰帶">
+          <span class="slot-icon">⛓️</span><span class="slot-label">腰帶</span>
+        </div>
+        <div class="equip-slot" data-slot="ring3" style="grid-row:5;grid-column:4" title="戒指3">
+          <span class="slot-icon">💍</span><span class="slot-label">戒指</span>
+        </div>
+        <div class="equip-slot" data-slot="ring4" style="grid-row:5;grid-column:5" title="戒指4">
+          <span class="slot-icon">💍</span><span class="slot-label">戒指</span>
+        </div>
+
+        <!-- Row 6: shoe (below belt) -->
+        <div class="equip-slot" data-slot="shoe" style="grid-row:6;grid-column:3" title="鞋子">
+          <span class="slot-icon">👟</span><span class="slot-label">鞋子</span>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Swap plan form -->
+      <div id="swap-form-area">
+        <div id="swap-placeholder" class="info-box" style="text-align:center">
+          點選上方裝備欄位以新增替換方案
+        </div>
+        <div id="swap-form" style="display:none">
+          <div class="swap-form-header">
+            <h3 id="swap-form-title">替換方案 — </h3>
+            <label class="checkbox-row overall-toggle" id="overall-toggle" style="display:none">
+              <input type="checkbox" id="overall-check">
+              <span>使用套服</span>
+            </label>
+          </div>
+
+          <div class="swap-section">
+            <div class="swap-section-top">
+              <span class="swap-section-header">目前裝備</span>
+              <label class="checkbox-row swap-allstat-toggle">
+                <input type="checkbox" id="cur-allstat-check">
+                <span>全屬性</span>
+              </label>
+            </div>
+            <div class="swap-stat-inline" id="cur-stat-row">
+              <div class="swap-stat-cell" id="cur-str-cell"><label>STR</label><input type="text" id="cur-str" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="cur-dex-cell"><label>DEX</label><input type="text" id="cur-dex" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="cur-int-cell"><label>INT</label><input type="text" id="cur-int" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="cur-luk-cell"><label>LUK</label><input type="text" id="cur-luk" value="0" inputmode="numeric"></div>
+            </div>
+            <div class="swap-stat-inline swap-allstat-single" id="cur-allstat-row" style="display:none">
+              <div class="swap-stat-cell"><label>ALL</label><input type="text" id="cur-all" value="0" inputmode="numeric"></div>
+            </div>
+            <div class="swap-atk-inline">
+              <div class="swap-stat-cell"><label>物攻 (WATK)</label><input type="text" id="cur-watk" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell"><label>魔攻 (MATK)</label><input type="text" id="cur-matk" value="0" inputmode="numeric"></div>
+            </div>
+          </div>
+
+          <div class="swap-arrow">▼</div>
+
+          <div class="swap-section">
+            <div class="swap-section-top">
+              <span class="swap-section-header">目標裝備</span>
+              <label class="checkbox-row swap-allstat-toggle">
+                <input type="checkbox" id="tgt-allstat-check">
+                <span>全屬性</span>
+              </label>
+            </div>
+            <div class="swap-stat-inline" id="tgt-stat-row">
+              <div class="swap-stat-cell" id="tgt-str-cell"><label>STR</label><input type="text" id="tgt-str" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="tgt-dex-cell"><label>DEX</label><input type="text" id="tgt-dex" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="tgt-int-cell"><label>INT</label><input type="text" id="tgt-int" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell" id="tgt-luk-cell"><label>LUK</label><input type="text" id="tgt-luk" value="0" inputmode="numeric"></div>
+            </div>
+            <div class="swap-stat-inline swap-allstat-single" id="tgt-allstat-row" style="display:none">
+              <div class="swap-stat-cell"><label>ALL</label><input type="text" id="tgt-all" value="0" inputmode="numeric"></div>
+            </div>
+            <div class="swap-atk-inline">
+              <div class="swap-stat-cell"><label>物攻 (WATK)</label><input type="text" id="tgt-watk" value="0" inputmode="numeric"></div>
+              <div class="swap-stat-cell"><label>魔攻 (MATK)</label><input type="text" id="tgt-matk" value="0" inputmode="numeric"></div>
+            </div>
+          </div>
+
+          <div class="swap-cost-row">
+            <label>更換成本</label>
+            <input type="number" id="swap-cost" value="0" min="0" step="any">
+            <select id="swap-cost-unit">
+              <option value="wan">萬</option>
+              <option value="yi">億</option>
+            </select>
+          </div>
+
+          <div class="swap-actions">
+            <button id="swap-confirm-btn" class="btn-primary">確認儲存</button>
+            <button id="swap-delete-btn" class="btn-danger" style="display:none">刪除方案</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right / Bottom: Stats + Ranking -->
+    <section class="panel" id="stats-panel">
+      <h2>角色數值</h2>
+
+      <div class="form-group">
+        <label for="job-select">職業</label>
+        <select id="job-select"></select>
+      </div>
+      <div class="form-group" id="weapon-group" style="display:none">
+        <label for="weapon-select">武器類型</label>
+        <select id="weapon-select"></select>
+      </div>
+
+      <div class="stat-row">
+        <label class="stat-label str">力量 STR</label>
+        <span class="stat-total" id="str-total">4</span>
+        <span class="stat-breakdown">(<input type="number" id="str-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="str-extra" value="0" min="0" class="stat-part-input">)</span>
+      </div>
+      <div class="stat-row">
+        <label class="stat-label dex">敏捷 DEX</label>
+        <span class="stat-total" id="dex-total">25</span>
+        <span class="stat-breakdown">(<input type="number" id="dex-base" value="25" min="0" class="stat-part-input"> + <input type="number" id="dex-extra" value="0" min="0" class="stat-part-input">)</span>
+      </div>
+      <div class="stat-row">
+        <label class="stat-label int">智力 INT</label>
+        <span class="stat-total" id="int-total">4</span>
+        <span class="stat-breakdown">(<input type="number" id="int-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="int-extra" value="0" min="0" class="stat-part-input">)</span>
+      </div>
+      <div class="stat-row">
+        <label class="stat-label luk">幸運 LUK</label>
+        <span class="stat-total" id="luk-total">300</span>
+        <span class="stat-breakdown">(<input type="number" id="luk-base" value="300" min="0" class="stat-part-input"> + <input type="number" id="luk-extra" value="0" min="0" class="stat-part-input">)</span>
+      </div>
+
+      <label class="checkbox-row" style="margin-top:4px">
+        <input type="checkbox" id="mw-enabled">
+        <span>已套用楓葉祝福 Lv.</span>
+        <input type="number" id="mw-level" value="30" min="1" max="30" class="inline-num">
+      </label>
+      <div class="info-box" id="mw-info" style="margin-top:6px"></div>
+
+      <hr>
+
+      <div class="form-group">
+        <label for="atk-max">攻擊力 (Attack Range): 乾淨表攻</label>
+        <div class="hint" style="margin-bottom:6px">請輸入最大攻擊力 (包含楓祝)，WATK 會自動推算</div>
+        <div class="range-inputs">
+          <input type="number" id="atk-max" value="2000" min="0" placeholder="MAX">
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-row">
+          <span class="info-label">推算物攻 (WATK):</span>
+          <span class="info-value" id="watk-value">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">目前最大表攻:</span>
+          <span class="info-value" id="current-max-atk">-</span>
+        </div>
+      </div>
+
+      <hr>
+
+      <h2>替換方案排序</h2>
+      <div class="hint" style="margin-bottom:10px">依據「每提升 1 表攻所需成本」由低到高排序</div>
+      <label class="checkbox-row" style="margin-bottom:10px">
+        <input type="checkbox" id="lock-sec-check">
+        <span>鎖定副屬性</span>
+        <input type="number" id="lock-sec-value" value="0" min="0" class="inline-num" style="width:60px">
+        <select id="lock-sec-stat" class="inline-select" style="display:none">
+          <option value="dex">DEX</option>
+          <option value="str">STR</option>
+        </select>
+        <span class="hint" style="margin-left:auto">(不包含楓祝)</span>
+      </label>
+      <div id="ranking-area">
+        <div class="info-box" style="text-align:center">尚無替換方案</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="../common/header.js"></script>
+  <script src="../common/theme.js"></script>
+  <script src="../common/nav.js"></script>
+  <script src="../common/footer.js"></script>
+  <script src="job.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

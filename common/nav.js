@@ -5,13 +5,15 @@
     exp: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
     event: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
     nshot: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>',
+    gear: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>',
     home: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
   };
 
   var TOOLS = [
     { id: 'exp', path: 'artale-exp-time-calculator', name: '\u7D93\u9A57\u503C\u6642\u9593\u6548\u7387\u8A08\u7B97\u6A5F' },
     { id: 'event', path: 'artale-event-tracker', name: '\u6D3B\u52D5\u9053\u5177\u8A08\u7B97\u6A5F' },
-    { id: 'nshot', path: 'artale-mob-n-shot-calculator', name: '\u64CA\u6BBA\u6B21\u6578\u8A08\u7B97\u6A5F' }
+    { id: 'nshot', path: 'artale-mob-n-shot-calculator', name: '\u64CA\u6BBA\u6B21\u6578\u8A08\u7B97\u6A5F' },
+    { id: 'gear', path: 'artale-gear-cost-calculator', name: '\u88DD\u5099\u6210\u672C\u8A08\u7B97\u6A5F' }
   ];
 
   var DESKTOP_BREAKPOINT = 769;
