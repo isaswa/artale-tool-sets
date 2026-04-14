@@ -140,6 +140,18 @@ body {
     cursor: not-allowed;
 }
 
+/* Preview Banner */
+.preview-banner {
+    background: var(--accent-color, #4a90d9);
+    color: #fff;
+    text-align: center;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
 /* Time Info */
 .time-info {
     background-color: var(--result-bg);
@@ -935,10 +947,11 @@ body {
 .shop-item {
     display: flex;
     align-items: center;
-    padding: 12px;
+    padding: 10px;
     background-color: var(--result-bg);
     border-radius: 6px;
     margin-bottom: 6px;
+    gap: 6px;
 }
 
 .shop-item:last-child {
@@ -955,24 +968,25 @@ body {
 }
 
 .shop-name {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     display: block;
+    white-space: nowrap;
 }
 
 .shop-cost {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     display: block;
-    margin-top: 2px;
+    margin-top: 1px;
+    white-space: nowrap;
 }
 
 .shop-controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     flex-shrink: 0;
-    margin-left: 12px;
 }
 
 .shop-checkbox {
@@ -983,13 +997,13 @@ body {
 }
 
 .qty-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border: 1px solid var(--input-border);
     border-radius: 4px;
     background-color: var(--input-bg);
     color: var(--text-color);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
@@ -1010,25 +1024,49 @@ body {
 
 .shop-max-btn {
     width: auto;
-    padding: 0 8px;
+    padding: 0 6px;
     font-size: 11px;
     letter-spacing: 0.5px;
 }
 
 .qty-display {
-    min-width: 40px;
+    min-width: 36px;
     text-align: center;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 .shop-total-cost {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--warning);
-    min-width: 50px;
+    min-width: 36px;
     text-align: right;
-    margin-left: 8px;
+}
+
+.shop-cart-btn {
+    background: none;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 3px 5px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.4;
+    transition: opacity 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.shop-cart-btn:hover {
+    opacity: 0.8;
+}
+
+.shop-cart-btn.active {
+    opacity: 1;
+    color: var(--success);
+    border-color: var(--success);
 }
 
 /* Reset Data Button */
@@ -1199,6 +1237,7 @@ body {
 
     .shop-item {
         flex-wrap: wrap;
+        justify-content: flex-end;
         padding: 10px;
     }
 
@@ -1209,7 +1248,6 @@ body {
     .shop-controls {
         margin-left: 0;
         margin-top: 8px;
-        width: 100%;
         justify-content: flex-end;
     }
 

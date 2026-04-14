@@ -117,7 +117,11 @@
     const now = new Date();
     const start = new Date(event.startDate + 'T00:00:00Z');
     const end = new Date(event.endDate + 'T00:00:00Z');
-    if (now < start) return 'upcoming';
+    if (now < start) {
+      const msUntilStart = start.getTime() - now.getTime();
+      if (msUntilStart <= 7 * 24 * 60 * 60 * 1000) return 'preview';
+      return 'upcoming';
+    }
     if (now >= end) return 'ended';
     return 'active';
   }
@@ -159,6 +163,7 @@
   }
 
   const PENCIL_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L3.463 11.1l-.47 1.642 1.642-.47 8.61-8.61a.25.25 0 0 0 0-.354l-1.086-1.086Z"/></svg>';
+  const CART_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
 
   function getSelectedEvent() {
     const saved = localStorage.getItem('artale_selected_event');
@@ -251,7 +256,7 @@
     }
 
     for (const m of event.checkin.milestones) {
-      if (state.checkin.count >= m.day) {
+      if (state.checkin.count >= m.day && !m.currency) {
         const source = `checkin_day${m.day}`;
         state.history[dateKey]['earn:' + source] = { type: 'earn', source, amount: m.reward };
       }
@@ -298,6 +303,7 @@
       tasks: {},
       checkin: { count: 0, lastDate: null },
       shop: {},
+      shopTargets: {},
       history: {}
     };
   }
@@ -340,6 +346,24 @@
     const currentPeriod = getPeriodKey(taskType, new Date(), eventStartDate);
     if (taskState.currentPeriod !== currentPeriod) return 0;
     return taskState.currentClaims || 0;
+  }
+
+  function hasAnyShopTarget(state) {
+    if (!state.shopTargets) return false;
+    for (var key in state.shopTargets) {
+      if (state.shopTargets[key]) return true;
+    }
+    return false;
+  }
+
+  function calculateTargetedShopCost(event, state) {
+    var hasTargets = hasAnyShopTarget(state);
+    return event.shop.reduce(function (sum, item) {
+      if (!hasTargets || (state.shopTargets && state.shopTargets[item.id])) {
+        return sum + item.cost * item.maxQty;
+      }
+      return sum;
+    }, 0);
   }
 
   function calculateTotals(event, state) {
@@ -402,7 +426,7 @@
     }
 
     for (const m of event.checkin.milestones) {
-      max += m.reward;
+      if (!m.currency) max += m.reward;
     }
 
     return max;
@@ -432,20 +456,32 @@
         saveState(event.id, state);
       }
 
-      const isEnded = getEventStatus(event) === 'ended';
+      const status = getEventStatus(event);
+      const isEnded = status === 'ended';
+      const isPreview = status === 'preview';
+      const isReadOnly = isEnded || isPreview;
 
       html += renderEventDropdown(events, event.id);
-      html += renderEventContent(event, state, isEnded);
+      if (isPreview) {
+        html += '<div class="preview-banner">活動尚未開始，目前為預覽模式</div>';
+      }
+      html += renderEventContent(event, state, isReadOnly);
       app.innerHTML = html;
 
       bindDropdown(events);
-      bindEventHandlers(event, state, isEnded);
+      bindEventHandlers(event, state, isReadOnly);
 
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(function () { updateEventTimers(event); }, 1000);
       updateEventTimers(event);
     } else {
-      // Hub page mode
+      // Hub page mode - auto-redirect to active/upcoming event if available
+      const activeEvent = getActiveEvent(events);
+      if (activeEvent) {
+        window.location.href = getEventUrl(activeEvent.id);
+        return;
+      }
+
       html += renderEventDropdown(events, null);
       html += renderHubContent();
       app.innerHTML = html;
@@ -462,7 +498,7 @@
     const sorted = [...events].sort(function (a, b) { return b.startDate.localeCompare(a.startDate); });
     return sorted.find(function (e) {
       const s = getEventStatus(e);
-      return s === 'active' || s === 'upcoming';
+      return s === 'active' || s === 'upcoming' || s === 'preview';
     }) || null;
   }
 
@@ -472,7 +508,7 @@
     const isOnHub = !selectedId;
     const isOnActiveEvent = selectedId && activeEvent && selectedId === activeEvent.id;
 
-    const statusLabels = { active: '進行中', upcoming: '即將開始', ended: '已結束' };
+    const statusLabels = { active: '進行中', preview: '即將開始', upcoming: '即將開始', ended: '已結束' };
 
     // First option: "目前進行中活動" - always present
     let currentLabel = '目前進行中活動';
@@ -577,24 +613,36 @@
   function renderSummary(event, state, totals) {
     const maxEarnable = calculateMaxEarnable(event);
     const remaining = maxEarnable - totals.earned;
-    const totalShopCost = event.shop.reduce(function (sum, item) { return sum + item.cost * item.maxQty; }, 0);
-    return '' +
-      '<div class="summary">' +
+    const sc = event.shopCurrency || event.currency;
+    const hasSeparateShopCurrency = !!event.shopCurrency && event.shopCurrency !== event.currency;
+    const totalShopCost = calculateTargetedShopCost(event, state);
+
+    var html = '<div class="summary">' +
         '<div class="summary-card earned" data-filter="earn" data-event="' + event.id + '">' +
           '<span class="summary-value" id="totalEarned-' + event.id + '">' + totals.earned + '</span>' +
           '<span class="summary-label">已獲得 ' + event.currency + '</span>' +
           '<span class="summary-subtitle" id="earnedSubtitle-' + event.id + '">活動結束前還可以獲得: ' + remaining + ' 個' + event.currency + '</span>' +
-        '</div>' +
+        '</div>';
+
+    if (event.shop.length > 0) {
+      html +=
         '<div class="summary-card spent" data-filter="spend" data-event="' + event.id + '">' +
           '<span class="summary-value" id="totalSpent-' + event.id + '">' + totals.spent + '</span>' +
-          '<span class="summary-label">已使用 ' + event.currency + '</span>' +
-          '<span class="summary-subtitle">買完商店道具需要: ' + totalShopCost + ' 個' + event.currency + '</span>' +
-        '</div>' +
+          '<span class="summary-label">已使用 ' + sc + '</span>' +
+          '<span class="summary-subtitle" id="shopTargetSubtitle-' + event.id + '">' + (hasAnyShopTarget(state) ? '買完指定商店道具還需要: ' : '買完商店道具需要: ') + Math.max(0, totalShopCost - totals.spent) + ' 個' + sc + '</span>' +
+        '</div>';
+    }
+
+    if (!hasSeparateShopCurrency) {
+      html +=
         '<div class="summary-card balance">' +
           '<span class="summary-value" id="balance-' + event.id + '">' + totals.balance + '</span>' +
           '<span class="summary-label">目前持有 ' + event.currency + '</span>' +
-        '</div>' +
-      '</div>';
+        '</div>';
+    }
+
+    html += '</div>';
+    return html;
   }
 
   function renderCheckin(event, state, isEnded) {
@@ -613,13 +661,15 @@
       milestonesHtml += '' +
         '<div class="milestone-item ' + (reached ? 'reached' : '') + '">' +
           '<span class="milestone-check">' + (reached ? '&#10003;' : '&#9675;') + '</span>' +
-          '<span>第' + m.day + '天：+' + m.reward + ' ' + event.currency + '</span>' +
+          '<span>第' + m.day + '天：+' + m.reward + ' ' + (m.currency || event.currency) + '</span>' +
         '</div>';
       markersHtml += '<div class="milestone-marker ' + (reached ? 'reached' : '') + '" style="left: ' + pos + '%" title="第' + m.day + '天"></div>';
     }
 
     let btnHtml;
-    if (isEnded) {
+    if (isEnded && getEventStatus(event) === 'preview') {
+      btnHtml = '<span style="color: var(--text-secondary); font-weight: 600;">活動尚未開始</span>';
+    } else if (isEnded) {
       btnHtml = '<span style="color: var(--text-secondary); font-weight: 600;">活動已結束</span>';
     } else if (checkedInToday) {
       btnHtml = '' +
@@ -856,6 +906,7 @@
   }
 
   function renderShop(event, state, isEnded) {
+    if (event.shop.length === 0) return '';
     const dis = isEnded ? ' disabled' : '';
     let itemsHtml = '';
     for (const item of event.shop) {
@@ -882,16 +933,20 @@
           '<button class="qty-btn shop-max-btn" data-event="' + event.id + '" data-item="' + item.id + '" ' + (qty >= item.maxQty || isEnded ? 'disabled' : '') + '>MAX</button>';
       }
 
+      const anyTargets = hasAnyShopTarget(state);
+      const isTargeted = anyTargets ? !!(state.shopTargets && state.shopTargets[item.id]) : false;
+
       itemsHtml += '' +
         '<div class="shop-item ' + (isPurchased ? 'purchased' : '') + '" id="shopItem-' + event.id + '-' + item.id + '">' +
           '<div class="shop-info">' +
             '<span class="shop-name">' + item.name + '</span>' +
-            '<span class="shop-cost">' + item.cost + ' ' + event.currency + ' / 個 ' + (item.note ? '・' + item.note : '') + '</span>' +
+            '<span class="shop-cost">' + item.cost + ' ' + (event.shopCurrency || event.currency) + ' / 個 ' + (item.note ? '・' + item.note : '') + '</span>' +
           '</div>' +
           '<div class="shop-controls">' +
             controlHtml +
           '</div>' +
           '<span class="shop-total-cost" id="shopCost-' + event.id + '-' + item.id + '">' + (totalCost > 0 ? '-' + totalCost : '') + '</span>' +
+          '<button class="shop-cart-btn' + (isTargeted ? ' active' : '') + '" data-event="' + event.id + '" data-item="' + item.id + '" title="指定">' + CART_SVG + '</button>' +
         '</div>';
     }
 
@@ -900,7 +955,7 @@
     return '' +
       '<div class="section" id="shopSection-' + event.id + '">' +
         '<div class="section-header" data-section="shop-' + event.id + '">' +
-          '<h3>' + event.currency + '商店</h3>' +
+          '<h3>' + (event.shopCurrency || event.currency) + '商店</h3>' +
           '<span class="toggle-icon' + (shopCollapsed ? ' collapsed' : '') + '" id="toggleIcon-shop-' + event.id + '">&#9660;</span>' +
         '</div>' +
         '<div class="section-body' + (shopCollapsed ? ' collapsed' : '') + '" id="sectionBody-shop-' + event.id + '">' +
@@ -932,6 +987,14 @@
       const maxEarnable = calculateMaxEarnable(event);
       const remaining = maxEarnable - totals.earned;
       subtitleEl.textContent = '活動結束前還可以獲得: ' + remaining + ' 個' + event.currency;
+    }
+
+    const shopSubtitleEl = document.getElementById('shopTargetSubtitle-' + event.id);
+    if (shopSubtitleEl) {
+      const sc = event.shopCurrency || event.currency;
+      const targetedCost = calculateTargetedShopCost(event, state);
+      const label = hasAnyShopTarget(state) ? '買完指定商店道具還需要: ' : '買完商店道具需要: ';
+      shopSubtitleEl.textContent = label + Math.max(0, targetedCost - totals.spent) + ' 個' + sc;
     }
   }
 
@@ -1076,6 +1139,13 @@
         handleShopMax(event, state, this);
       });
     });
+
+    // Shop cart target buttons
+    document.querySelectorAll('.shop-cart-btn[data-event="' + event.id + '"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleShopCartToggle(event, state, this);
+      });
+    });
   }
 
   function handleCheckin(event, state) {
@@ -1087,7 +1157,7 @@
     state.checkin.lastDate = todayKey;
 
     for (const m of event.checkin.milestones) {
-      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
         addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
       }
     }
@@ -1102,7 +1172,7 @@
     if (state.checkin.lastDate !== todayKey) return;
 
     for (const m of event.checkin.milestones) {
-      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
         removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
       }
     }
@@ -1118,14 +1188,15 @@
     const section = document.getElementById('checkinSection-' + event.id);
     if (!section) return;
 
-    const isEnded = getEventStatus(event) === 'ended';
+    const s = getEventStatus(event);
+    const isReadOnly = s === 'ended' || s === 'preview';
     const temp = document.createElement('div');
-    temp.innerHTML = renderCheckin(event, state, isEnded);
+    temp.innerHTML = renderCheckin(event, state, isReadOnly);
     const newSection = temp.firstElementChild;
 
     section.replaceWith(newSection);
 
-    if (!isEnded) {
+    if (!isReadOnly) {
       const checkinBtn = document.getElementById('checkinBtn-' + event.id);
       if (checkinBtn) {
         checkinBtn.addEventListener('click', function () {
@@ -1274,9 +1345,10 @@
     const section = document.getElementById('tasksSection-' + event.id);
     if (!section) return;
 
-    const isEnded = getEventStatus(event) === 'ended';
+    const s = getEventStatus(event);
+    const isReadOnly = s === 'ended' || s === 'preview';
     const temp = document.createElement('div');
-    temp.innerHTML = renderTasks(event, state, isEnded);
+    temp.innerHTML = renderTasks(event, state, isReadOnly);
     const newSection = temp.firstElementChild;
 
     section.replaceWith(newSection);
@@ -1293,7 +1365,7 @@
       });
     }
 
-    if (!isEnded) {
+    if (!isReadOnly) {
       newSection.querySelectorAll('.task-checkbox[data-event="' + event.id + '"]').forEach(function (cb) {
         cb.addEventListener('change', function () {
           handleTaskToggle(event, state, this);
@@ -1496,6 +1568,15 @@
     updateSummaryDisplay(event, state);
   }
 
+  function handleShopCartToggle(event, state, button) {
+    const itemId = button.dataset.item;
+    if (!state.shopTargets) state.shopTargets = {};
+    state.shopTargets[itemId] = !state.shopTargets[itemId];
+    button.classList.toggle('active', state.shopTargets[itemId]);
+    saveState(event.id, state);
+    updateSummaryDisplay(event, state);
+  }
+
   // ===== History Modal =====
 
   function resolveSourceName(event, source) {
@@ -1527,9 +1608,10 @@
 
   function showHistoryModal(event, state, filterType) {
     const dates = Object.keys(state.history || {}).sort().reverse();
+    const currencyLabel = filterType === 'spend' ? (event.shopCurrency || event.currency) : event.currency;
     const title = filterType === 'earn'
-      ? '已獲得 ' + event.currency + ' 明細'
-      : '已使用 ' + event.currency + ' 明細';
+      ? '已獲得 ' + currencyLabel + ' 明細'
+      : '已使用 ' + currencyLabel + ' 明細';
     const sign = filterType === 'earn' ? '+' : '-';
 
     let bodyHtml = '';
@@ -1553,7 +1635,7 @@
         '<div class="history-day">' +
           '<div class="history-day-header">' +
             '<span>' + dateKey + '</span>' +
-            '<span>' + sign + dayTotal + ' ' + event.currency + '</span>' +
+            '<span>' + sign + dayTotal + ' ' + currencyLabel + '</span>' +
           '</div>' +
           entriesHtml +
         '</div>';
@@ -1700,7 +1782,7 @@
       if (state.checkin.count >= theoreticalMax) return;
       state.checkin.count++;
       for (const m of event.checkin.milestones) {
-        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
           addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
         }
       }
@@ -1712,7 +1794,7 @@
     document.getElementById('editCheckinMinus').addEventListener('click', function () {
       if (state.checkin.count <= 0) return;
       for (const m of event.checkin.milestones) {
-        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
           removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
         }
       }
