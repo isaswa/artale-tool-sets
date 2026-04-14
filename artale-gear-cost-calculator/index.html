@@ -197,22 +197,22 @@
       <div class="stat-row">
         <label class="stat-label str">力量 STR</label>
         <span class="stat-total" id="str-total">4</span>
-        <span class="stat-breakdown">(<input type="number" id="str-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="str-extra" value="0" min="0" class="stat-part-input">)</span>
+        <span class="stat-breakdown">(<input type="text" id="str-base" value="4" inputmode="numeric" class="stat-part-input"> + <input type="text" id="str-extra" value="0" inputmode="numeric" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
         <label class="stat-label dex">敏捷 DEX</label>
         <span class="stat-total" id="dex-total">25</span>
-        <span class="stat-breakdown">(<input type="number" id="dex-base" value="25" min="0" class="stat-part-input"> + <input type="number" id="dex-extra" value="0" min="0" class="stat-part-input">)</span>
+        <span class="stat-breakdown">(<input type="text" id="dex-base" value="25" inputmode="numeric" class="stat-part-input"> + <input type="text" id="dex-extra" value="0" inputmode="numeric" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
         <label class="stat-label int">智力 INT</label>
         <span class="stat-total" id="int-total">4</span>
-        <span class="stat-breakdown">(<input type="number" id="int-base" value="4" min="0" class="stat-part-input"> + <input type="number" id="int-extra" value="0" min="0" class="stat-part-input">)</span>
+        <span class="stat-breakdown">(<input type="text" id="int-base" value="4" inputmode="numeric" class="stat-part-input"> + <input type="text" id="int-extra" value="0" inputmode="numeric" class="stat-part-input">)</span>
       </div>
       <div class="stat-row">
         <label class="stat-label luk">幸運 LUK</label>
         <span class="stat-total" id="luk-total">300</span>
-        <span class="stat-breakdown">(<input type="number" id="luk-base" value="300" min="0" class="stat-part-input"> + <input type="number" id="luk-extra" value="0" min="0" class="stat-part-input">)</span>
+        <span class="stat-breakdown">(<input type="text" id="luk-base" value="300" inputmode="numeric" class="stat-part-input"> + <input type="text" id="luk-extra" value="0" inputmode="numeric" class="stat-part-input">)</span>
       </div>
 
       <label class="checkbox-row" style="margin-top:4px">
@@ -228,7 +228,7 @@
         <label for="atk-max">攻擊力 (Attack Range): 乾淨表攻</label>
         <div class="hint" style="margin-bottom:6px">請輸入最大攻擊力 (包含楓祝)，WATK 會自動推算</div>
         <div class="range-inputs">
-          <input type="number" id="atk-max" value="2000" min="0" placeholder="MAX">
+          <input type="text" id="atk-max" value="2000" inputmode="numeric" placeholder="MAX">
         </div>
       </div>
 
@@ -245,7 +245,10 @@
 
       <hr>
 
-      <h2>替換方案排序</h2>
+      <div class="section-header-row">
+        <h2>替換方案排序</h2>
+        <button id="refresh-ranking-btn" class="btn-icon" title="刷新排序">&#x21bb;</button>
+      </div>
       <div class="hint" style="margin-bottom:10px">依據「每提升 1 表攻所需成本」由低到高排序</div>
       <label class="checkbox-row" style="margin-bottom:10px">
         <input type="checkbox" id="lock-sec-check">

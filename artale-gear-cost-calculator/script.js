@@ -64,7 +64,7 @@ function intVal(el) { return parseInt(el.value) || 0; }
 // === Stat input validation ===
 function validateStatInput(input, max) {
   const raw = input.value.trim();
-  const cell = input.closest('.swap-stat-cell');
+  const cell = input.closest('.swap-stat-cell') || input.parentElement;
   const existing = cell.querySelector('.validation-tip');
 
   // Remove old tooltip
@@ -218,12 +218,14 @@ function init() {
   atkMaxInput.addEventListener('input', updateWATK);
   atkMaxInput.addEventListener('input', updateRanking);
 
-  allInputs.forEach(el =>
-    el.addEventListener('blur', () => {
-      el.value = Math.max(0, Math.floor(parseFloat(el.value) || 0));
-      saveStats();
-    })
-  );
+  allStatInputs.forEach(el => {
+    el.addEventListener('input', () => validateStatInput(el, 999));
+    el.addEventListener('blur', () => { clampStatOnBlur(el, 999); saveStats(); });
+  });
+  atkMaxInput.addEventListener('blur', () => {
+    atkMaxInput.value = Math.max(0, Math.floor(parseFloat(atkMaxInput.value) || 0));
+    saveStats();
+  });
 
   // MW
   mwEnabled.addEventListener('change', () => {
@@ -293,6 +295,13 @@ function init() {
   // Swap form buttons
   swapConfirmBtn.addEventListener('click', onSwapConfirm);
   swapDeleteBtn.addEventListener('click', onSwapDelete);
+
+  // Refresh ranking
+  document.getElementById('refresh-ranking-btn').addEventListener('click', () => {
+    updateStatTotals();
+    updateWATK();
+    updateRanking();
+  });
 }
 
 // ============================================================

@@ -147,13 +147,15 @@ function init() {
     });
   });
 
-  // Sanitize stat/range inputs on blur: clamp to non-negative integer
-  [...allStatInputs, atkMaxInput].forEach(el =>
-    el.addEventListener('blur', () => {
-      el.value = Math.max(0, Math.floor(parseFloat(el.value) || 0));
-      saveToStorage();
-    })
-  );
+  // Validate & clamp stat inputs (0–999)
+  allStatInputs.forEach(el => {
+    el.addEventListener('input', () => validateStatInput(el, 999));
+    el.addEventListener('blur', () => { clampStatOnBlur(el, 999); saveToStorage(); });
+  });
+  atkMaxInput.addEventListener('blur', () => {
+    atkMaxInput.value = Math.max(0, Math.floor(parseFloat(atkMaxInput.value) || 0));
+    saveToStorage();
+  });
   // Validate skill level inputs on input
   [skillLevelInput, venomLevelInput].forEach(el =>
     el.addEventListener('input', () => validateSkillLevel(el))
@@ -972,6 +974,41 @@ function isInvalidLevel(el) {
 }
 
 /** Show/hide validation tooltip on skill level inputs */
+function validateStatInput(input, max) {
+  const raw = input.value.trim();
+  const cell = input.parentElement;
+  const existing = cell.querySelector('.validation-tip');
+  if (existing) existing.remove();
+  input.classList.remove('input-invalid');
+  if (raw === '' || raw === '0') return;
+  if (!/^\d+$/.test(raw)) {
+    input.classList.add('input-invalid');
+    const tip = document.createElement('span');
+    tip.className = 'validation-tip';
+    tip.textContent = '請輸入正整數';
+    cell.appendChild(tip);
+    setTimeout(() => { if (tip.parentNode) tip.remove(); }, 2000);
+    return;
+  }
+  if (parseInt(raw, 10) > max) {
+    input.classList.add('input-invalid');
+    const tip = document.createElement('span');
+    tip.className = 'validation-tip';
+    tip.textContent = '最大值 ' + max;
+    cell.appendChild(tip);
+    setTimeout(() => { if (tip.parentNode) tip.remove(); }, 2000);
+  }
+}
+
+function clampStatOnBlur(input, max) {
+  const raw = input.value.trim();
+  if (raw === '') { input.value = '0'; return; }
+  const val = parseInt(raw, 10);
+  if (isNaN(val) || val < 0) { input.value = '0'; return; }
+  if (val > max) { input.value = max; return; }
+  input.value = val;
+}
+
 function validateSkillLevel(el) {
   const invalid = isInvalidLevel(el);
   const min = parseInt(el.min) || 0;
