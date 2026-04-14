@@ -12,11 +12,21 @@
     shopCurrency: '黃金楓葉',
     tasks: {
       daily: [
-        { id: 'daily_maple', name: '(任務名稱待定)', reward: 300, note: '' }
+        { id: 'maple_tree', name: '1周年栽培楓樹', reward: 0, note: '獎勵：隨機數量楓葉 + 隨機數量黃金楓葉', npc: 'GM露露' }
       ],
-      weekly: [],
+      weekly: [
+        { id: 'golden_pig', name: '擊敗黃金豬吧！', reward: 780, claims: 15, rewardPerClaim: 52, note: '每次 47~52 楓葉 ｜ 週五六日 11/14/17/20/23 點 ｜ 每日上限 5 次', npc: 'GM露露' }
+      ],
       biweekly: [],
-      onetime: []
+      onetime: [
+        { id: 'maple_tree_gift', name: '楓樹準備的1周年禮物', reward: 0, rewardShop: 5, note: '', npc: 'GM露露' },
+        { id: 'find_cake', name: '再把蛋糕找回來吧！', reward: 300, note: '', npc: 'GM露露' },
+        { id: 'hidden_candles', name: '尋找隱藏的蠟燭', reward: 0, rewardShop: 2, note: '另有隨機黃金楓葉（上限未知）', npc: 'GM露露' },
+        { id: 'stage1_invitation', name: '1階段 吹散的邀請函', reward: 200, rewardShop: 2, note: '', npc: 'GM露露' },
+        { id: 'stage2_cake', name: '2階段 消失的生日蛋糕', reward: 200, rewardShop: 2, note: '', npc: '加加' },
+        { id: 'stage3_deliver', name: '3階段 傳達邀請函', reward: 0, note: '獎勵：名聲', npc: 'GM露露' },
+        { id: 'stage4_celebrate', name: '4階段 一起慶祝生日', reward: 200, rewardShop: 2, note: '+ 活動勳章', npc: 'GM露露' }
+      ]
     },
     checkin: {
       maxDays: 42,

@@ -188,15 +188,23 @@
 
   // ===== History Helpers =====
 
-  function addHistoryEntry(state, type, source, amount) {
+  function getEntryCurrency(entry) {
+    if (entry.currency) return entry.currency;
+    // Legacy default: earn -> primary, spend -> shop (matches historical single-currency behaviour)
+    return entry.type === 'spend' ? 'shop' : 'primary';
+  }
+
+  function addHistoryEntry(state, type, source, amount, currency) {
     if (!state.history) state.history = {};
     const dateKey = getUTCDateKey(new Date());
     if (!state.history[dateKey]) state.history[dateKey] = {};
     const key = type + ':' + source;
+    const cur = currency || 'primary';
     if (state.history[dateKey][key]) {
       state.history[dateKey][key].amount += amount;
+      state.history[dateKey][key].currency = cur;
     } else {
-      state.history[dateKey][key] = { type, source, amount };
+      state.history[dateKey][key] = { type, source, amount, currency: cur };
     }
   }
 
@@ -367,29 +375,34 @@
   }
 
   function calculateTotals(event, state) {
-    let totalEarned = 0;
-    let totalSpent = 0;
+    let pEarn = 0, pSpend = 0, sEarn = 0, sSpend = 0;
 
     if (state.history) {
       for (const dateKey in state.history) {
         const dayMap = state.history[dateKey];
         for (const key in dayMap) {
           const entry = dayMap[key];
-          if (entry.type === 'earn') totalEarned += entry.amount;
-          else if (entry.type === 'spend') totalSpent += entry.amount;
+          const cur = getEntryCurrency(entry);
+          if (entry.type === 'earn' && cur === 'primary') pEarn += entry.amount;
+          else if (entry.type === 'spend' && cur === 'primary') pSpend += entry.amount;
+          else if (entry.type === 'earn' && cur === 'shop') sEarn += entry.amount;
+          else if (entry.type === 'spend' && cur === 'shop') sSpend += entry.amount;
         }
       }
     }
 
     return {
-      earned: totalEarned,
-      spent: totalSpent,
-      balance: totalEarned - totalSpent
+      earned: pEarn,
+      spent: sSpend,
+      balance: pEarn - pSpend,
+      primary: { earned: pEarn, spent: pSpend, balance: pEarn - pSpend },
+      shop: { earned: sEarn, spent: sSpend, balance: sEarn - sSpend }
     };
   }
 
   function calculateMaxEarnable(event) {
-    let max = 0;
+    let primaryMax = 0;
+    let shopMax = 0;
     const start = new Date(event.startDate + 'T00:00:00Z');
     const end = new Date(event.endDate + 'T00:00:00Z');
     const totalDays = Math.floor((end - start) / (24 * 60 * 60 * 1000));
@@ -414,22 +427,24 @@
               if (opt.bonusWeeks && !opt.bonusWeeks.includes(w)) r = 0;
               bestReward = Math.max(bestReward, r);
             }
-            max += bestReward;
+            primaryMax += bestReward;
           }
         } else {
-          max += task.reward * periods;
+          primaryMax += (task.reward || 0) * periods;
+          shopMax += (task.rewardShop || 0) * periods;
         }
         if (task.streakBonus) {
-          max += task.streakBonus.reward;
+          primaryMax += task.streakBonus.reward;
         }
       }
     }
 
     for (const m of event.checkin.milestones) {
-      if (!m.currency) max += m.reward;
+      if (m.currency) shopMax += m.reward;
+      else primaryMax += m.reward;
     }
 
-    return max;
+    return { primary: primaryMax, shop: shopMax, total: primaryMax };
   }
 
   // ===== Rendering =====
@@ -612,24 +627,34 @@
 
   function renderSummary(event, state, totals) {
     const maxEarnable = calculateMaxEarnable(event);
-    const remaining = maxEarnable - totals.earned;
+    const remaining = maxEarnable.primary - totals.primary.earned;
     const sc = event.shopCurrency || event.currency;
     const hasSeparateShopCurrency = !!event.shopCurrency && event.shopCurrency !== event.currency;
     const totalShopCost = calculateTargetedShopCost(event, state);
 
     var html = '<div class="summary">' +
-        '<div class="summary-card earned" data-filter="earn" data-event="' + event.id + '">' +
-          '<span class="summary-value" id="totalEarned-' + event.id + '">' + totals.earned + '</span>' +
+        '<div class="summary-card earned" data-filter="earn" data-currency="primary" data-event="' + event.id + '">' +
+          '<span class="summary-value" id="totalEarned-' + event.id + '">' + totals.primary.earned + '</span>' +
           '<span class="summary-label">已獲得 ' + event.currency + '</span>' +
           '<span class="summary-subtitle" id="earnedSubtitle-' + event.id + '">活動結束前還可以獲得: ' + remaining + ' 個' + event.currency + '</span>' +
         '</div>';
 
+    if (hasSeparateShopCurrency) {
+      const shopRemaining = maxEarnable.shop - totals.shop.earned;
+      html +=
+        '<div class="summary-card earned" data-filter="earn" data-currency="shop" data-event="' + event.id + '">' +
+          '<span class="summary-value" id="totalShopEarned-' + event.id + '">' + totals.shop.earned + '</span>' +
+          '<span class="summary-label">已獲得 ' + sc + '</span>' +
+          '<span class="summary-subtitle" id="shopEarnedSubtitle-' + event.id + '">活動結束前還可以獲得: ' + shopRemaining + ' 個' + sc + '</span>' +
+        '</div>';
+    }
+
     if (event.shop.length > 0) {
       html +=
-        '<div class="summary-card spent" data-filter="spend" data-event="' + event.id + '">' +
-          '<span class="summary-value" id="totalSpent-' + event.id + '">' + totals.spent + '</span>' +
+        '<div class="summary-card spent" data-filter="spend" data-currency="shop" data-event="' + event.id + '">' +
+          '<span class="summary-value" id="totalSpent-' + event.id + '">' + totals.shop.spent + '</span>' +
           '<span class="summary-label">已使用 ' + sc + '</span>' +
-          '<span class="summary-subtitle" id="shopTargetSubtitle-' + event.id + '">' + (hasAnyShopTarget(state) ? '買完指定商店道具還需要: ' : '買完商店道具需要: ') + Math.max(0, totalShopCost - totals.spent) + ' 個' + sc + '</span>' +
+          '<span class="summary-subtitle" id="shopTargetSubtitle-' + event.id + '">' + (hasAnyShopTarget(state) ? '買完指定商店道具還需要: ' : '買完商店道具需要: ') + Math.max(0, totalShopCost - totals.shop.spent) + ' 個' + sc + '</span>' +
         '</div>';
     }
 
@@ -638,6 +663,12 @@
         '<div class="summary-card balance">' +
           '<span class="summary-value" id="balance-' + event.id + '">' + totals.balance + '</span>' +
           '<span class="summary-label">目前持有 ' + event.currency + '</span>' +
+        '</div>';
+    } else {
+      html +=
+        '<div class="summary-card balance">' +
+          '<span class="summary-value" id="shopBalance-' + event.id + '">' + totals.shop.balance + '</span>' +
+          '<span class="summary-label">目前持有 ' + sc + '</span>' +
         '</div>';
     }
 
@@ -823,8 +854,14 @@
         '<span class="task-reward">' + event.currency + '</span>';
     } else if (task.variable) {
       rewardHtml = '<span class="task-reward">+' + task.minReward + '~' + task.reward + ' ' + event.currency + '</span>';
-    } else {
+    } else if (task.reward > 0 || !task.rewardShop) {
       rewardHtml = '<span class="task-reward">+' + task.reward + ' ' + event.currency + '</span>';
+    } else {
+      rewardHtml = '';
+    }
+    if (task.rewardShop > 0 && !task.cardSelect) {
+      const sc = event.shopCurrency || event.currency;
+      rewardHtml += '<span class="task-reward">+' + task.rewardShop + ' ' + sc + '</span>';
     }
 
     return '' +
@@ -836,7 +873,7 @@
               ' data-event="' + event.id + '"' +
               ' data-task="' + task.id + '"' +
               ' data-type="' + type + '"' +
-              (task.cardSelect ? ' data-card-select="true"' : ' data-reward="' + task.reward + '" data-min-reward="' + (task.minReward || task.reward) + '" data-variable="' + (!!task.variable) + '"') +
+              (task.cardSelect ? ' data-card-select="true"' : ' data-reward="' + task.reward + '" data-reward-shop="' + (task.rewardShop || 0) + '" data-min-reward="' + (task.minReward || task.reward) + '" data-variable="' + (!!task.variable) + '"') +
               (completed ? ' checked' : '') +
               dis + '>' +
             '<div class="task-info">' +
@@ -895,6 +932,7 @@
               '<span class="task-note">' + (task.note || '') + '</span>' +
             '</div>' +
             '<span class="task-reward">+' + (claims * task.rewardPerClaim) + '/' + task.reward + ' ' + event.currency + '</span>' +
+            (task.rewardShopPerClaim ? '<span class="task-reward">+' + (claims * task.rewardShopPerClaim) + '/' + (task.rewardShopPerClaim * task.claims) + ' ' + (event.shopCurrency || event.currency) + '</span>' : '') +
             (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
           '</div>' +
           bonusHtml +
@@ -975,26 +1013,34 @@
 
   function updateSummaryDisplay(event, state) {
     const totals = calculateTotals(event, state);
+    const sc = event.shopCurrency || event.currency;
     const earnedEl = document.getElementById('totalEarned-' + event.id);
+    const shopEarnedEl = document.getElementById('totalShopEarned-' + event.id);
     const spentEl = document.getElementById('totalSpent-' + event.id);
     const balanceEl = document.getElementById('balance-' + event.id);
-    if (earnedEl) earnedEl.textContent = totals.earned;
-    if (spentEl) spentEl.textContent = totals.spent;
+    const shopBalanceEl = document.getElementById('shopBalance-' + event.id);
+    if (earnedEl) earnedEl.textContent = totals.primary.earned;
+    if (shopEarnedEl) shopEarnedEl.textContent = totals.shop.earned;
+    if (spentEl) spentEl.textContent = totals.shop.spent;
     if (balanceEl) balanceEl.textContent = totals.balance;
+    if (shopBalanceEl) shopBalanceEl.textContent = totals.shop.balance;
 
+    const maxEarnable = calculateMaxEarnable(event);
     const subtitleEl = document.getElementById('earnedSubtitle-' + event.id);
     if (subtitleEl) {
-      const maxEarnable = calculateMaxEarnable(event);
-      const remaining = maxEarnable - totals.earned;
-      subtitleEl.textContent = '活動結束前還可以獲得: ' + remaining + ' 個' + event.currency;
+      subtitleEl.textContent = '活動結束前還可以獲得: ' + (maxEarnable.primary - totals.primary.earned) + ' 個' + event.currency;
+    }
+
+    const shopEarnedSubtitleEl = document.getElementById('shopEarnedSubtitle-' + event.id);
+    if (shopEarnedSubtitleEl) {
+      shopEarnedSubtitleEl.textContent = '活動結束前還可以獲得: ' + (maxEarnable.shop - totals.shop.earned) + ' 個' + sc;
     }
 
     const shopSubtitleEl = document.getElementById('shopTargetSubtitle-' + event.id);
     if (shopSubtitleEl) {
-      const sc = event.shopCurrency || event.currency;
       const targetedCost = calculateTargetedShopCost(event, state);
       const label = hasAnyShopTarget(state) ? '買完指定商店道具還需要: ' : '買完商店道具需要: ';
-      shopSubtitleEl.textContent = label + Math.max(0, targetedCost - totals.spent) + ' 個' + sc;
+      shopSubtitleEl.textContent = label + Math.max(0, targetedCost - totals.shop.spent) + ' 個' + sc;
     }
   }
 
@@ -1040,7 +1086,7 @@
     // Summary card click handlers (history modal) - always available
     document.querySelectorAll('.summary-card[data-filter][data-event="' + event.id + '"]').forEach(function (card) {
       card.addEventListener('click', function () {
-        showHistoryModal(event, state, this.dataset.filter);
+        showHistoryModal(event, state, this.dataset.filter, this.dataset.currency || null);
       });
     });
 
@@ -1157,8 +1203,12 @@
     state.checkin.lastDate = todayKey;
 
     for (const m of event.checkin.milestones) {
-      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
-        addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+        if (m.currency) {
+          addHistoryEntry(state, 'earn', 'checkin_day' + m.day + '_shop', m.reward, 'shop');
+        } else {
+          addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward, 'primary');
+        }
       }
     }
 
@@ -1172,8 +1222,12 @@
     if (state.checkin.lastDate !== todayKey) return;
 
     for (const m of event.checkin.milestones) {
-      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
-        removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+      if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+        if (m.currency) {
+          removeHistoryEntry(state, 'earn', 'checkin_day' + m.day + '_shop', m.reward);
+        } else {
+          removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+        }
       }
     }
 
@@ -1254,20 +1308,27 @@
         taskState.currentReward = reward;
         taskState.selectedCard = selectedCard;
         if (reward > 0) {
-          addHistoryEntry(state, 'earn', taskId, reward);
+          addHistoryEntry(state, 'earn', taskId, reward, 'primary');
         }
       } else {
         const reward = maxReward;
+        const rewardShop = taskDef && taskDef.rewardShop ? taskDef.rewardShop : 0;
         taskState.currentPeriod = periodKey;
         taskState.currentReward = reward;
-        addHistoryEntry(state, 'earn', taskId, reward);
+        taskState.currentRewardShop = rewardShop;
+        if (reward > 0) addHistoryEntry(state, 'earn', taskId, reward, 'primary');
+        if (rewardShop > 0) addHistoryEntry(state, 'earn', taskId + '_shop', rewardShop, 'shop');
       }
     } else {
       if (taskState.currentReward > 0) {
         removeHistoryEntry(state, 'earn', taskId, taskState.currentReward);
       }
+      if (taskState.currentRewardShop > 0) {
+        removeHistoryEntry(state, 'earn', taskId + '_shop', taskState.currentRewardShop);
+      }
       taskState.currentPeriod = null;
       taskState.currentReward = 0;
+      taskState.currentRewardShop = 0;
     }
 
     saveState(event.id, state);
@@ -1304,10 +1365,12 @@
 
     if (action === 'plus' && claims < task.claims) {
       claims++;
-      addHistoryEntry(state, 'earn', taskId, task.rewardPerClaim);
+      if (task.rewardPerClaim > 0) addHistoryEntry(state, 'earn', taskId, task.rewardPerClaim, 'primary');
+      if (task.rewardShopPerClaim > 0) addHistoryEntry(state, 'earn', taskId + '_shop', task.rewardShopPerClaim, 'shop');
     } else if (action === 'minus' && claims > 0) {
       claims--;
-      removeHistoryEntry(state, 'earn', taskId, task.rewardPerClaim);
+      if (task.rewardPerClaim > 0) removeHistoryEntry(state, 'earn', taskId, task.rewardPerClaim);
+      if (task.rewardShopPerClaim > 0) removeHistoryEntry(state, 'earn', taskId + '_shop', task.rewardShopPerClaim);
     } else {
       return;
     }
@@ -1580,6 +1643,14 @@
   // ===== History Modal =====
 
   function resolveSourceName(event, source) {
+    if (source.endsWith('_shop')) {
+      const baseId = source.replace(/_shop$/, '');
+      const task = findTask(event, baseId);
+      if (task) return task.name;
+      if (baseId.startsWith('checkin_day')) {
+        return '簽到第' + baseId.replace('checkin_day', '') + '天';
+      }
+    }
     if (source.endsWith('_past')) {
       const baseId = source.replace('_past', '');
       const task = findTask(event, baseId);
@@ -1606,9 +1677,10 @@
     return source;
   }
 
-  function showHistoryModal(event, state, filterType) {
+  function showHistoryModal(event, state, filterType, filterCurrency) {
     const dates = Object.keys(state.history || {}).sort().reverse();
-    const currencyLabel = filterType === 'spend' ? (event.shopCurrency || event.currency) : event.currency;
+    const effectiveCurrency = filterCurrency || (filterType === 'spend' ? 'shop' : 'primary');
+    const currencyLabel = effectiveCurrency === 'shop' ? (event.shopCurrency || event.currency) : event.currency;
     const title = filterType === 'earn'
       ? '已獲得 ' + currencyLabel + ' 明細'
       : '已使用 ' + currencyLabel + ' 明細';
@@ -1618,7 +1690,9 @@
 
     for (const dateKey of dates) {
       const dayMap = state.history[dateKey] || {};
-      const entries = Object.values(dayMap).filter(function (e) { return e.type === filterType; });
+      const entries = Object.values(dayMap).filter(function (e) {
+        return e.type === filterType && getEntryCurrency(e) === effectiveCurrency;
+      });
       if (entries.length === 0) continue;
 
       const dayTotal = entries.reduce(function (sum, e) { return sum + e.amount; }, 0);
@@ -1782,8 +1856,12 @@
       if (state.checkin.count >= theoreticalMax) return;
       state.checkin.count++;
       for (const m of event.checkin.milestones) {
-        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
-          addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+          if (m.currency) {
+            addHistoryEntry(state, 'earn', 'checkin_day' + m.day + '_shop', m.reward, 'shop');
+          } else {
+            addHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward, 'primary');
+          }
         }
       }
       saveState(event.id, state);
@@ -1794,8 +1872,12 @@
     document.getElementById('editCheckinMinus').addEventListener('click', function () {
       if (state.checkin.count <= 0) return;
       for (const m of event.checkin.milestones) {
-        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day && !m.currency) {
-          removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+        if (state.checkin.count >= m.day && state.checkin.count - 1 < m.day) {
+          if (m.currency) {
+            removeHistoryEntry(state, 'earn', 'checkin_day' + m.day + '_shop', m.reward);
+          } else {
+            removeHistoryEntry(state, 'earn', 'checkin_day' + m.day, m.reward);
+          }
         }
       }
       state.checkin.count--;
