@@ -432,9 +432,13 @@
         } else {
           primaryMax += (task.reward || 0) * periods;
           shopMax += (task.rewardShop || 0) * periods;
+          shopMax += (task.rewardShopPerClaim || 0) * (task.claims || 0) * periods;
         }
         if (task.streakBonus) {
           primaryMax += task.streakBonus.reward;
+        }
+        if (Array.isArray(task.lifetimeBonusShop)) {
+          shopMax += task.lifetimeBonusShop.reduce(function (a, b) { return a + b; }, 0);
         }
       }
     }
@@ -863,6 +867,18 @@
       const sc = event.shopCurrency || event.currency;
       rewardHtml += '<span class="task-reward">+' + task.rewardShop + ' ' + sc + '</span>';
     }
+    if (Array.isArray(task.lifetimeBonusShop) && !task.cardSelect) {
+      const lc = (taskState && taskState.lifetimeCount) || 0;
+      const total = task.lifetimeBonusShop.length;
+      const sc = event.shopCurrency || event.currency;
+      if (lc < total) {
+        const nextBonus = task.lifetimeBonusShop[lc];
+        rewardHtml += '<span class="task-reward">+' + nextBonus + ' ' + sc + '</span>';
+        rewardHtml += '<span class="task-reward-sub">(累計 ' + lc + '/' + total + ')</span>';
+      } else {
+        rewardHtml += '<span class="task-reward-sub">累計獎勵已領完 (' + lc + '/' + total + ')</span>';
+      }
+    }
 
     return '' +
       '<div class="task-row">' +
@@ -881,7 +897,7 @@
               '<span class="task-note">' + (task.note || '') + '</span>' +
             '</div>' +
             cardSelectHtml +
-            rewardHtml +
+            (rewardHtml ? '<div class="task-reward-group">' + rewardHtml + '</div>' : '') +
             (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
           '</div>' +
           cardInfoHtml +
@@ -931,8 +947,10 @@
               '<span class="task-name">' + task.name + '</span>' +
               '<span class="task-note">' + (task.note || '') + '</span>' +
             '</div>' +
-            '<span class="task-reward">+' + (claims * task.rewardPerClaim) + '/' + task.reward + ' ' + event.currency + '</span>' +
-            (task.rewardShopPerClaim ? '<span class="task-reward">+' + (claims * task.rewardShopPerClaim) + '/' + (task.rewardShopPerClaim * task.claims) + ' ' + (event.shopCurrency || event.currency) + '</span>' : '') +
+            '<div class="task-reward-group">' +
+              '<span class="task-reward">+' + (claims * task.rewardPerClaim) + '/' + task.reward + ' ' + event.currency + '</span>' +
+              (task.rewardShopPerClaim ? '<span class="task-reward">+' + (claims * task.rewardShopPerClaim) + '/' + (task.rewardShopPerClaim * task.claims) + ' ' + (event.shopCurrency || event.currency) + '</span>' : '') +
+            '</div>' +
             (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
           '</div>' +
           bonusHtml +
@@ -1318,6 +1336,18 @@
         taskState.currentRewardShop = rewardShop;
         if (reward > 0) addHistoryEntry(state, 'earn', taskId, reward, 'primary');
         if (rewardShop > 0) addHistoryEntry(state, 'earn', taskId + '_shop', rewardShop, 'shop');
+
+        if (taskDef && Array.isArray(taskDef.lifetimeBonusShop)) {
+          const prevCount = taskState.lifetimeCount || 0;
+          const bonus = taskDef.lifetimeBonusShop[prevCount];
+          if (bonus) {
+            addHistoryEntry(state, 'earn', taskId + '_shop', bonus, 'shop');
+            taskState.lastLifetimeBonus = bonus;
+          } else {
+            taskState.lastLifetimeBonus = 0;
+          }
+          taskState.lifetimeCount = prevCount + 1;
+        }
       }
     } else {
       if (taskState.currentReward > 0) {
@@ -1326,6 +1356,12 @@
       if (taskState.currentRewardShop > 0) {
         removeHistoryEntry(state, 'earn', taskId + '_shop', taskState.currentRewardShop);
       }
+      if (taskDef && Array.isArray(taskDef.lifetimeBonusShop) && taskState.lifetimeCount > 0) {
+        const bonus = taskState.lastLifetimeBonus || taskDef.lifetimeBonusShop[taskState.lifetimeCount - 1] || 0;
+        if (bonus) removeHistoryEntry(state, 'earn', taskId + '_shop', bonus);
+        taskState.lifetimeCount = taskState.lifetimeCount - 1;
+        taskState.lastLifetimeBonus = 0;
+      }
       taskState.currentPeriod = null;
       taskState.currentReward = 0;
       taskState.currentRewardShop = 0;
@@ -1333,7 +1369,8 @@
 
     saveState(event.id, state);
 
-    if (isVariable || isCardSelect) {
+    const hasLifetimeBonus = taskDef && Array.isArray(taskDef.lifetimeBonusShop);
+    if (isVariable || isCardSelect || hasLifetimeBonus) {
       rerenderTasks(event, state);
     } else {
       const taskItem = document.getElementById('taskItem-' + event.id + '-' + taskId);
