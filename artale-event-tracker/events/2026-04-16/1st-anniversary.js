@@ -17,7 +17,7 @@
       ],
       weekly: [
         { id: 'bowman_cake_event', name: '弓箭手村蛋糕大騷動', reward: 1200, lifetimeBonusShop: [5, 5, 5], note: '組隊任務 ｜ 累計前 3 次各加贈 5 黃金楓葉', npc: '明明夫人' },
-        { id: 'hidden_candles', name: '尋找隱藏的蠟燭', reward: 0, rewardShop: 2, note: '另有隨機黃金楓葉（上限未知）', npc: 'GM露露' },
+        { id: 'hidden_candles', name: '尋找隱藏的蠟燭', reward: 0, rewardShop: 5, note: '另有隨機黃金楓葉（上限未知）', npc: 'GM露露' },
         { id: 'golden_pig', name: '擊敗黃金豬吧！', reward: 780, claims: 15, rewardPerClaim: 52, note: '每次 47~52 楓葉 (週五六日，每日上限 5 次)', npc: 'GM露露' }
       ],
       biweekly: [],

@@ -189,8 +189,7 @@
   // ===== History Helpers =====
 
   function getEntryCurrency(entry) {
-    if (entry.currency) return entry.currency;
-    // Legacy default: earn -> primary, spend -> shop (matches historical single-currency behaviour)
+    if (entry.currency && !(entry.type === 'spend' && entry.currency === 'primary')) return entry.currency;
     return entry.type === 'spend' ? 'shop' : 'primary';
   }
 
@@ -1568,7 +1567,7 @@
 
     if (checkbox.checked) {
       state.shop[itemId] = 1;
-      addHistoryEntry(state, 'spend', itemId, item.cost);
+      addHistoryEntry(state, 'spend', itemId, item.cost, 'shop');
     } else {
       state.shop[itemId] = 0;
       removeHistoryEntry(state, 'spend', itemId, item.cost);
@@ -1596,7 +1595,7 @@
     let qty = state.shop[itemId] || 0;
     if (action === 'plus' && qty < item.maxQty) {
       qty++;
-      addHistoryEntry(state, 'spend', itemId, item.cost);
+      addHistoryEntry(state, 'spend', itemId, item.cost, 'shop');
     } else if (action === 'minus' && qty > 0) {
       qty--;
       removeHistoryEntry(state, 'spend', itemId, item.cost);
@@ -1639,7 +1638,7 @@
     if (toAdd <= 0) return;
 
     for (let i = 0; i < toAdd; i++) {
-      addHistoryEntry(state, 'spend', itemId, item.cost);
+      addHistoryEntry(state, 'spend', itemId, item.cost, 'shop');
     }
     state.shop[itemId] = item.maxQty;
     saveState(event.id, state);
