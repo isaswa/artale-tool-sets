@@ -173,6 +173,40 @@
     opacity: 1;
 }
 
+/* ===== External links section (友站連結) ===== */
+
+.nav-sidebar-external {
+    border-top: 1px solid var(--input-border);
+    flex-shrink: 0;
+}
+
+.nav-sidebar-external .nav-sidebar-list {
+    padding: 4px 0 12px;
+    flex: none;
+}
+
+.nav-section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px 6px;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    color: var(--text-color);
+}
+
+.nav-sidebar-external .nav-link {
+    opacity: 0.7;
+    font-size: 14px;
+}
+
+.nav-sidebar-external .nav-link:hover {
+    opacity: 1;
+}
+
 /* ===== Desktop: Always-visible Sidebar ===== */
 
 @media (min-width: 769px) {
@@ -260,6 +294,13 @@
         white-space: nowrap;
     }
 
+    /* Collapsed: section title shows only its icon, centered */
+    .nav-section-title {
+        justify-content: center;
+        padding: 12px 0 6px;
+        gap: 0;
+    }
+
     .nav-link.active {
         border-left: none;
     }
@@ -278,6 +319,13 @@
     .nav-sidebar.pinned .nav-label {
         display: inline;
         white-space: nowrap;
+    }
+
+    /* Pinned: restore section title left-aligned icon + label */
+    .nav-sidebar.pinned .nav-section-title {
+        justify-content: flex-start;
+        padding: 12px 20px 6px;
+        gap: 12px;
     }
 
     .nav-sidebar.pinned .nav-link.active {

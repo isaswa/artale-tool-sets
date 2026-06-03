@@ -6,8 +6,15 @@
     event: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
     nshot: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>',
     gear: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>',
-    home: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
+    home: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+    external: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>',
+    book: '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>'
   };
+
+  // External (友站) links — add new entries here as the list grows.
+  var EXTERNAL_LINKS = [
+    { icon: 'book', name: 'artale圖鑑', url: 'https://www.artalemaplestory.com/zh' }
+  ];
 
   var TOOLS = [
     { id: 'exp', path: 'artale-exp-time-calculator', name: '\u7D93\u9A57\u503C\u6642\u9593\u6548\u7387\u8A08\u7B97\u6A5F' },
@@ -114,11 +121,42 @@
 
     sidebar.appendChild(ul);
 
+    // External links section (友站連結) — sits above the home link
+    var externalSection = document.createElement('div');
+    externalSection.className = 'nav-sidebar-external';
+
+    var externalTitle = document.createElement('div');
+    externalTitle.className = 'nav-section-title';
+    externalTitle.innerHTML = ICONS.external +
+      '<span class="nav-label">友站連結</span>';
+    externalSection.appendChild(externalTitle);
+
+    var externalUl = document.createElement('ul');
+    externalUl.className = 'nav-sidebar-list';
+    for (var m = 0; m < EXTERNAL_LINKS.length; m++) {
+      var ext = EXTERNAL_LINKS[m];
+      var extLi = document.createElement('li');
+      var extLink = createNavLink(
+        ICONS[ext.icon],
+        ext.name,
+        ext.url,
+        false,
+        null
+      );
+      extLink.target = '_blank';
+      extLink.rel = 'noopener noreferrer';
+      extLi.appendChild(extLink);
+      externalUl.appendChild(extLi);
+    }
+    externalSection.appendChild(externalUl);
+    sidebar.appendChild(externalSection);
+
     // Home link at bottom
     var homeSection = document.createElement('div');
     homeSection.className = 'nav-sidebar-home';
     var homeUl = document.createElement('ul');
     homeUl.className = 'nav-sidebar-list';
+
     var homeLi = document.createElement('li');
     var homeLink = createNavLink(
       ICONS.home,
