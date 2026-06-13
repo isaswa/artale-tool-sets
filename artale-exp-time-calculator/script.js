@@ -1222,8 +1222,15 @@ function calculateResults(e) {
             }
             if (effectiveDays > 0) {
                 const dailyExpTarget = Math.ceil(totalExpNeeded / effectiveDays);
-                // Calculate absolute EXP position after today's target
-                const currentTotalExp = calculateTotalExp(currentLevel, currentExp);
+                // Calculate absolute EXP position after today's target.
+                // Baseline is the final EXP of the last day with a record (the
+                // previous day's last record), so the target stays fixed as the
+                // day progresses. Fall back to the current input when there is
+                // no earlier record yet.
+                const baselineTotalExp = getTodayBaselineTotalExp();
+                const currentTotalExp = baselineTotalExp !== null
+                    ? baselineTotalExp
+                    : calculateTotalExp(currentLevel, currentExp);
                 const targetTotalExp = currentTotalExp + dailyExpTarget;
                 const targetInfo = totalExpToLevelPercent(targetTotalExp);
                 todayExpLevelEl.textContent = `Lv.${targetInfo.level}`;
@@ -2404,6 +2411,23 @@ function totalExpToLevelPercent(totalExp) {
 }
 
 // Get today's EXP gained from history records
+// Total EXP of the last record before today (i.e. the final EXP of the most
+// recent day that has a record). Returns null when no such record exists.
+function getTodayBaselineTotalExp() {
+    if (levelHistory.length === 0) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.getTime();
+
+    for (let i = levelHistory.length - 1; i >= 0; i--) {
+        if (levelHistory[i].timestamp < todayStart) {
+            return levelHistory[i].totalExp;
+        }
+    }
+    return null;
+}
+
 function getTodayExpGained() {
     if (levelHistory.length === 0) return 0;
 
