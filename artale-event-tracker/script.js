@@ -629,6 +629,8 @@
   }
 
   function renderSummary(event, state, totals) {
+    // Item-reward events have no currency to total up; rewards are shown per-task.
+    if (event.itemRewards) return '';
     const maxEarnable = calculateMaxEarnable(event);
     const remaining = maxEarnable.primary - totals.primary.earned;
     const sc = event.shopCurrency || event.currency;
@@ -700,6 +702,8 @@
       markersHtml += '<div class="milestone-marker ' + (reached ? 'reached' : '') + '" style="left: ' + pos + '%" title="第' + m.day + '天"></div>';
     }
 
+    const calendarHtml = renderCheckinCalendar(event, count);
+
     let btnHtml;
     if (isEnded && getEventStatus(event) === 'preview') {
       btnHtml = '<span style="color: var(--text-secondary); font-weight: 600;">活動尚未開始</span>';
@@ -741,7 +745,39 @@
               '<div class="milestone-markers">' + markersHtml + '</div>' +
             '</div>' +
           '</div>' +
-          '<div class="milestone-list">' + milestonesHtml + '</div>' +
+          (milestonesHtml ? '<div class="milestone-list">' + milestonesHtml + '</div>' : '') +
+          calendarHtml +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderCheckinCalendar(event, count) {
+    const calendar = event.checkin.calendar;
+    if (!Array.isArray(calendar) || calendar.length === 0) return '';
+
+    const key = 'checkinCalendar-' + event.id;
+    const collapsed = isSectionCollapsed(key);
+
+    let cellsHtml = '';
+    for (const c of calendar) {
+      const claimed = count >= c.day;
+      cellsHtml += '' +
+        '<div class="checkin-cal-cell' + (claimed ? ' claimed' : '') + '">' +
+          '<span class="checkin-cal-day">第' + c.day + '日</span>' +
+          '<span class="checkin-cal-label">' + c.label + '</span>' +
+          (c.sub ? '<span class="checkin-cal-sub">' + c.sub + '</span>' : '') +
+          (claimed ? '<span class="checkin-cal-check">&#10003;</span>' : '') +
+        '</div>';
+    }
+
+    return '' +
+      '<div class="checkin-calendar-wrap">' +
+        '<div class="checkin-cal-header" data-section="' + key + '">' +
+          '<span>每日獎勵明細</span>' +
+          '<span class="toggle-icon' + (collapsed ? ' collapsed' : '') + '" id="toggleIcon-' + key + '">&#9660;</span>' +
+        '</div>' +
+        '<div class="checkin-cal-body' + (collapsed ? ' collapsed' : '') + '" id="sectionBody-' + key + '">' +
+          '<div class="checkin-cal-grid">' + cellsHtml + '</div>' +
         '</div>' +
       '</div>';
   }
@@ -780,7 +816,7 @@
             '<div class="task-group-header-right">' +
               countdownHtml +
               '<span class="task-group-npc-label">任務NPC</span>' +
-              '<span class="task-group-edit-label">補登</span>' +
+              (event.itemRewards ? '' : '<span class="task-group-edit-label">補登</span>') +
             '</div>' +
           '</div>' +
           tasksHtml +
@@ -801,6 +837,32 @@
       '</div>';
   }
 
+  function renderItemRewardTask(event, task, type, completed, isEnded) {
+    const dis = isEnded ? ' disabled' : '';
+
+    return '' +
+      '<div class="task-row">' +
+        '<div class="task-row-content">' +
+          '<div class="task-item task-item-item-reward ' + (completed ? 'completed' : '') + '" id="taskItem-' + event.id + '-' + task.id + '">' +
+            '<input type="checkbox" class="task-checkbox"' +
+              ' id="task-' + event.id + '-' + task.id + '"' +
+              ' data-event="' + event.id + '"' +
+              ' data-task="' + task.id + '"' +
+              ' data-type="' + type + '"' +
+              ' data-reward="0" data-reward-shop="0" data-min-reward="0" data-variable="false"' +
+              (completed ? ' checked' : '') +
+              dis + '>' +
+            '<div class="task-info">' +
+              '<span class="task-name">' + task.name + '</span>' +
+              '<span class="task-reward-item">' + (task.rewardText || '') + '</span>' +
+            '</div>' +
+            (task.npc ? '<span class="task-npc">' + task.npc + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="task-row-edit"></div>' +
+      '</div>';
+  }
+
   function renderCheckboxTask(event, state, task, type, isEnded) {
     const completed = isTaskCompleted(task.id, type, state, event.startDate);
     const taskState = state.tasks[task.id];
@@ -811,7 +873,10 @@
     let cardInfoHtml = '';
     let extraClass = '';
 
-    if (task.cardSelect) {
+    if (event.itemRewards) {
+      // Item-reward events: show the literal reward text instead of currency.
+      return renderItemRewardTask(event, task, type, completed, isEnded);
+    } else if (task.cardSelect) {
       const selectedCard = (taskState && taskState.selectedCard) || task.cardSelect[0].card;
       const reward = getCardReward(task, selectedCard, event.startDate);
       const selectedOption = task.cardSelect.find(function (c) { return c.card === selectedCard; });
@@ -1289,8 +1354,9 @@
       }
     }
 
-    const header = newSection.querySelector('.section-header');
-    if (header) {
+    // Re-bind all collapsible headers within the re-rendered section
+    // (the outer check-in header and the nested daily-gift calendar header).
+    newSection.querySelectorAll('[data-section]').forEach(function (header) {
       header.addEventListener('click', function () {
         const sectionKey = this.dataset.section;
         toggleCollapsedState(sectionKey);
@@ -1299,7 +1365,7 @@
         if (body) body.classList.toggle('collapsed');
         if (icon) icon.classList.toggle('collapsed');
       });
-    }
+    });
   }
 
   function handleTaskToggle(event, state, checkbox) {

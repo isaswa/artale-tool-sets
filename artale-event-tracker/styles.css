@@ -1290,3 +1290,106 @@ body {
     }
 
 }
+
+/* ===== Item-reward events (e.g. 端午節活動) ===== */
+.task-item-item-reward {
+    align-items: flex-start;
+}
+
+.task-item-item-reward .task-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.task-reward-item {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+    text-align: left;
+    white-space: normal;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+/* ===== Check-in daily-gift calendar ===== */
+.checkin-calendar-wrap {
+    margin-top: 12px;
+    border-top: 1px solid var(--input-border);
+    padding-top: 12px;
+}
+
+.checkin-cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.checkin-cal-body.collapsed {
+    display: none;
+}
+
+.checkin-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.checkin-cal-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 6px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    min-height: 78px;
+    text-align: center;
+}
+
+.checkin-cal-cell.claimed {
+    background-color: var(--success-light);
+    border-color: var(--success);
+}
+
+.checkin-cal-day {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.checkin-cal-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color);
+    line-height: 1.3;
+}
+
+.checkin-cal-sub {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
+.checkin-cal-cell.claimed .checkin-cal-check {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--success);
+}
+
+@media (max-width: 768px) {
+    .checkin-cal-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
